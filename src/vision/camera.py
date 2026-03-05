@@ -1,6 +1,8 @@
-# This module should provide a Camera class with read_frame() and release() methods.import numpy as np
+# This module should provide a Camera class with read_frame() and release() methods.
+
+import numpy as np
 import cv2 as cv #extracted from https://docs.opencv.org/4.x/dd/d43/tutorial_py_video_display.html#:~:text=Capture%20Video%20from%20Camera,cap.release()
- 
+
 cap = cv.VideoCapture(0)
 if not cap.isOpened():
     print("Cannot open camera")
