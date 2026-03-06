@@ -30,14 +30,24 @@ class Database:
         cursor = self._get_connection().cursor()
 
         # Create a SESSIONS table to store user session data
-        # id            - unique identifier for each session
-        # start_time    - time the session started (ISO 8601)
-        # end_time      - time the session ended (ISO 8601); NULL while active
-        # duration      - total duration of the session in seconds
-        # events        - total number of events (distractions / look-aways) during the session
-        # time_away     - total time spent away from the desk in seconds
-        # look_away_time    - total time spent looking away from the screen in seconds
-        # distraction_time  - total time spent distracted in seconds
+        # id                      - unique identifier for each session
+        # start_time              - time the session started (ISO 8601)
+        # end_time                - time the session ended (ISO 8601); NULL while active
+        # duration                - total duration of the session in seconds
+        # focused_time            - time spent focused (not distracted) in seconds
+        # events                  - total number of distraction events
+        # time_away               - total time spent away from the desk in seconds
+        # look_away_time          - total time spent looking away from the screen in seconds
+        # distraction_time        - total time spent distracted in seconds
+        # phone_distractions      - distractions caused by phone use
+        # look_away_distractions  - distractions caused by looking away from the screen
+        # left_desk_distractions  - distractions caused by leaving the desk
+        # app_distractions        - distractions caused by switching to off-task apps
+        # idle_distractions       - distractions caused by inactivity
+        # focus_percentage        - focused_time / duration as a percentage
+        # score                   - session performance score
+        # points_earned           - experience points earned this session
+        # coins_earned            - coins earned this session
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sessions (
@@ -45,10 +55,20 @@ class Database:
                 start_time TEXT NOT NULL,
                 end_time TEXT,
                 duration INTEGER DEFAULT 0,
+                focused_time INTEGER DEFAULT 0,
                 events INTEGER DEFAULT 0,
                 time_away INTEGER DEFAULT 0,
                 look_away_time INTEGER DEFAULT 0,
-                distraction_time INTEGER DEFAULT 0
+                distraction_time INTEGER DEFAULT 0,
+                phone_distractions INTEGER DEFAULT 0,
+                look_away_distractions INTEGER DEFAULT 0,
+                left_desk_distractions INTEGER DEFAULT 0,
+                app_distractions INTEGER DEFAULT 0,
+                idle_distractions INTEGER DEFAULT 0,
+                focus_percentage REAL DEFAULT 0,
+                score INTEGER DEFAULT 0,
+                points_earned INTEGER DEFAULT 0,
+                coins_earned INTEGER DEFAULT 0
             )
         ''')
 
