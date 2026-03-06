@@ -11,7 +11,7 @@ while cap.isOpened():
         break
 
     # Detect phones only (COCO class 67)
-    results = model(frame, classes=[67])
+    results = model(frame, classes=[67], conf=0.1)  # Adjust confidence threshold as needed
 
     # Draw bounding boxes on the frame
     annotated = results[0].plot()
@@ -19,6 +19,7 @@ while cap.isOpened():
     cv.imshow("Phone Detection", annotated)
     if cv.waitKey(1) == ord("q"):
         break
+
 
 cap.release()
 cv.destroyAllWindows()
