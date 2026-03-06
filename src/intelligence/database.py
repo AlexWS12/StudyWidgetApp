@@ -12,8 +12,7 @@ class Database:
     def _get_connection(self) -> sqlite3.Connection:
         if self.conn is None:
             self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
-            # Converts query results from tuples to dictionary objects
-            self.conn.row_factory = sqlite3.Row
+            self.conn.row_factory = sqlite3.Row # Converts query results from tuples to dictionary objects
         return self.conn
 
 
