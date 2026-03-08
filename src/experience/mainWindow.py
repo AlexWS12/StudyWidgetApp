@@ -12,14 +12,16 @@ class MainWindow(QMainWindow):
 
         # Main container for the main window
         self.main_container = QWidget()
-        self.main_container.setLayout(QHBoxLayout())
-
-        self.sidebar = Sidebar(self)
-        self.main_container.layout().addWidget(self.sidebar)
-
-        self.dashboard = dashboard(self)
-        self.main_container.layout().addWidget(self.dashboard)
-
+        self.layout = QHBoxLayout()
+        self.main_container.setLayout(self.layout)
         self.setCentralWidget(self.main_container)
+
+        # Initilize Sidebar
+        self.sidebar = Sidebar(self)
+        self.layout.addWidget(self.sidebar)
+
+        # placeholder for main content
+        self.layout.addWidget(QWidget())  
+
         self.show()
 
