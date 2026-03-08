@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel
 from PySide6.QtGui import QPixmap
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QEvent
 
 class petWindow(QMainWindow):
     def __init__(self):
@@ -29,8 +29,32 @@ class petWindow(QMainWindow):
         self.container = QWidget()
         self.layout = QVBoxLayout()
         self.container.setLayout(self.layout)
-        self.layout.addWidget(self.label) 
+        self.layout.addWidget(self.label)
         self.setCentralWidget(self.container)
 
-        
+        # Draggable window
+        self.drag_position = None
+        self.label.installEventFilter(self)
+        self.label.setCursor(Qt.OpenHandCursor)
+
+    def eventFilter(self, obj, event):
+        if obj == self.label:
+            if event.type() == QEvent.MouseButtonPress:
+                if event.button() == Qt.LeftButton:
+                    self.drag_position = event.globalPosition().toPoint()
+                    self.label.setCursor(Qt.ClosedHandCursor)
+                    return True
+            elif event.type() == QEvent.MouseMove:
+                if event.buttons() & Qt.LeftButton and self.drag_position is not None:
+                    delta = event.globalPosition().toPoint() - self.drag_position
+                    self.move(self.pos() + delta)
+                    self.drag_position = event.globalPosition().toPoint()
+                    return True
+            elif event.type() == QEvent.MouseButtonRelease:
+                if event.button() == Qt.LeftButton:
+                    self.drag_position = None
+                    self.label.setCursor(Qt.OpenHandCursor)
+                    return True
+        return super().eventFilter(obj, event)
+
 
