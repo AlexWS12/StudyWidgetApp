@@ -76,25 +76,33 @@ class Database:
         cursor = self._get_connection().cursor()
 
         # Create a USER_STATS table to store overall user statistics
-        # id                - enforced singleton row (always 1)
-        # avg_focus_time    - average focus time per session in seconds
-        # total_sessions    - total number of completed sessions
-        # total_time_spent  - cumulative time spent in sessions in seconds
-        # coins             - total coins earned by the user
-        # exp               - total experience points earned by the user
+        # id                 - enforced singleton row (always 1)
+        # level              - current user level
+        # avg_focus_time     - average focus time per session in seconds
+        # total_sessions     - total number of completed sessions
+        # total_time_spent   - cumulative time spent in sessions in seconds
+        # coins              - total coins earned by the user
+        # exp                - total experience points earned by the user
         # total_distractions - total distractions across all sessions
-        # total_look_aways  - total look-aways across all sessions
+        # total_look_aways   - total look-aways across all sessions
+        # current_pet        - the pet the user currently has equipped
+        # created_at         - time the user stats row was created (ISO 8601)
+        # updated_at         - time the user stats row was last updated (ISO 8601)
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_stats (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
+                level INTEGER DEFAULT 1,
                 avg_focus_time REAL DEFAULT 0.0,
                 total_sessions INTEGER DEFAULT 0,
                 total_time_spent INTEGER DEFAULT 0,
                 coins INTEGER DEFAULT 0,
                 exp INTEGER DEFAULT 0,
                 total_distractions INTEGER DEFAULT 0,
-                total_look_aways INTEGER DEFAULT 0
+                total_look_aways INTEGER DEFAULT 0,
+                current_pet TEXT DEFAULT 'default',
+                created_at TEXT,
+                updated_at TEXT
             )
         ''')
 
@@ -108,6 +116,7 @@ class Database:
         # event_type - the type of event (e.g. distraction, look_away)
         # timestamp  - time the event occurred (ISO 8601)
         # duration   - duration of the event in seconds
+        # details    - optional extra info about the event
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS events (
@@ -116,6 +125,7 @@ class Database:
                 event_type TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
                 duration INTEGER DEFAULT 0,
+                details TEXT,
                 FOREIGN KEY (session_id) REFERENCES sessions (id)
             )
         ''')
@@ -129,8 +139,11 @@ class Database:
         # name        - name of the achievement
         # description - description of the achievement
         # criteria    - criteria for earning the achievement (e.g. "Focus for 1 hour straight")
+        # emoji       - emoji icon representing the achievement
         # unlocked    - 1 if earned, 0 otherwise
         # unlocked_at - time the achievement was earned (ISO 8601); NULL until earned
+        # progress    - current progress toward the achievement target
+        # target      - value needed to unlock the achievement
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS achievements (
@@ -138,13 +151,16 @@ class Database:
                 name TEXT NOT NULL,
                 description TEXT NOT NULL,
                 criteria TEXT NOT NULL,
+                emoji TEXT DEFAULT '🏆',
                 unlocked INTEGER DEFAULT 0,
-                unlocked_at TEXT
+                unlocked_at TEXT,
+                progress INTEGER DEFAULT 0,
+                target INTEGER DEFAULT 1
             )
         ''')
 
-# Close the database connection when done
-    def close(self): 
+    # Close the database connection when done
+    def close(self):
         if self.conn:
             self.conn.close()
             self.conn = None
