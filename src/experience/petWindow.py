@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplication
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, QEvent
 
@@ -55,6 +55,15 @@ class petWindow(QMainWindow):
                     self.drag_position = None
                     self.label.setCursor(Qt.OpenHandCursor)
                     return True
+            elif event.type() == QEvent.MouseButtonDblClick:
+                if event.button() == Qt.LeftButton:
+                    self._end_session()
+                    return True
         return super().eventFilter(obj, event)
+
+    def _end_session(self):
+        app = QApplication.instance()
+        app.main_window.show()
+        self.hide()
 
 

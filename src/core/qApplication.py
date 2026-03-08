@@ -19,7 +19,6 @@ class QApplication(QApplication):
 
     def open_pet_window(self):
         self.pet_window = petWindow()
-        self.pet_window.show()
 
     def position_pet_window(self):
         if not hasattr(self, 'pet_window') or not self.pet_window.isVisible():
