@@ -1,3 +1,7 @@
+from src.intelligence.database import Database
+def main():
+    print("Hello from studywidgetapp!")
+    db = Database()
 from src.core.qApplication import QApplication
 
 q_application = QApplication()
