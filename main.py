@@ -2,7 +2,7 @@ from src.intelligence.database import Database
 def main():
     print("Hello from studywidgetapp!")
     db = Database()
+from src.core.qApplication import QApplication
 
-
-if __name__ == "__main__":
-    main()
+q_application = QApplication()
+q_application.run()

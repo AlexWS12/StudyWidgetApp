@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Model weights (downloaded automatically by YOLO/MediaPipe)
+*.pt
+
 # C extensions
 *.so
 
@@ -98,7 +101,7 @@ ipython_config.py
 #   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
-#uv.lock
+uv.lock
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
@@ -208,3 +211,5 @@ __marimo__/
 
 # Intelligence
 data.db
+# uv
+uv.lock
