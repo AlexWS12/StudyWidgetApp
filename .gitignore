@@ -209,5 +209,7 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# Intelligence
+data.db
 # uv
 uv.lock
