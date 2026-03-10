@@ -10,8 +10,10 @@ class SessionState(Enum):
 
 class DistractionType(Enum):
     PHONE_DISTRACTION = "phone_distraction"
+    LOOK_AWAY_DISTRACTION = "look_away_distraction"
+    LEFT_DESK_DISTRACTION = "left_desk_distraction"
     APP_DISTRACTION = "app_distraction"
-    IDLE_DISTRACTION = "idle_distraction"   
+    IDLE_DISTRACTION = "idle_distraction"
    
 
 class SessionManager:
