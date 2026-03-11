@@ -73,10 +73,11 @@ class eyeTracker:
 
         return frame
 
-    # -----------------------------
-    # Extract iris + head pose + gaze
-    # -----------------------------
+        # -----------------------------
+        # Extract iris + head pose + gaze
+        # -----------------------------
     def extract_eye_data(self, landmarks, frame):
+
         data = {
             "face_present": landmarks is not None,
             "eyes_detected": False,
@@ -91,17 +92,17 @@ class eyeTracker:
 
         w, h = frame.shape[1], frame.shape[0]
 
-        # Head pose
+        # Get head pose
         pitch, yaw, roll, _, _, _, _ = self.estimate_head_pose(landmarks, frame)
 
-        # Calibrate neutral pitch once
+        # Calibrate neutral pitch once (when program starts or first face detected)
         if self.neutral_pitch is None:
             self.neutral_pitch = pitch
-        pitch_offset = pitch - self.neutral_pitch
 
-        # -----------------------------
-        # Iris centers
-        # -----------------------------
+        # Compute pitch offset and flip it to match intuition
+        pitch_offset = -(pitch - self.neutral_pitch)
+
+        # --- Iris centers ---
         right_iris = landmarks[468]
         left_iris = landmarks[473]
 
@@ -112,9 +113,9 @@ class eyeTracker:
         data["right_iris"] = (rx, ry)
         data["left_iris"] = (lx, ly)
 
-        # -----------------------------
+        # ---------------------------------
         # Horizontal iris gaze
-        # -----------------------------
+        # ---------------------------------
         right_eye_left = int(landmarks[33].x * w)
         right_eye_right = int(landmarks[133].x * w)
         left_eye_left = int(landmarks[362].x * w)
@@ -122,18 +123,18 @@ class eyeTracker:
 
         right_ratio = (rx - right_eye_left) / (right_eye_right - right_eye_left)
         left_ratio = (lx - left_eye_left) / (left_eye_right - left_eye_left)
-        avg_h = (right_ratio + left_ratio) / 2
+        avg_ratio = (right_ratio + left_ratio) / 2
 
-        if avg_h < 0.40:
+        if avg_ratio < 0.40:
             iris_horizontal = "left"
-        elif avg_h > 0.60:
+        elif avg_ratio > 0.60:
             iris_horizontal = "right"
         else:
             iris_horizontal = "center"
 
-        # -----------------------------
-        # Horizontal head pose
-        # -----------------------------
+        # ---------------------------------
+        # Head horizontal
+        # ---------------------------------
         if yaw < -10:
             head_horizontal = "left"
         elif yaw > 10:
@@ -141,29 +142,9 @@ class eyeTracker:
         else:
             head_horizontal = "center"
 
-        # -----------------------------
-        # Vertical iris gaze (0=top, 1=bottom)
-        # -----------------------------
-        # Use top/bottom eyelid landmarks
-        r_top = int(landmarks[159].y * h)
-        r_bottom = int(landmarks[145].y * h)
-        l_top = int(landmarks[386].y * h)
-        l_bottom = int(landmarks[374].y * h)
-
-        right_v_ratio = (ry - r_top) / max(r_bottom - r_top, 1)
-        left_v_ratio = (ly - l_top) / max(l_bottom - l_top, 1)
-        avg_v = (right_v_ratio + left_v_ratio) / 2
-
-        if avg_v < 0.35:
-            iris_vertical = "up"
-        elif avg_v > 0.65:
-            iris_vertical = "down"
-        else:
-            iris_vertical = "center"
-
-        # -----------------------------
-        # Vertical head pose (fallback)
-        # -----------------------------
+        # ---------------------------------
+        # Vertical from pitch offset (corrected)
+        # ---------------------------------
         if pitch_offset > 2.5:
             head_vertical = "up"
         elif pitch_offset < -2.5:
@@ -171,21 +152,21 @@ class eyeTracker:
         else:
             head_vertical = "center"
 
-        # -----------------------------
+        # ---------------------------------
         # Combine iris + head
-        # -----------------------------
+        # ---------------------------------
         final_horizontal = iris_horizontal
-        final_vertical = iris_vertical if iris_vertical != "center" else head_vertical
+        final_vertical = head_vertical
 
-        # Override horizontal if head turned
         if head_horizontal != "center":
             final_horizontal = head_horizontal
 
         data["gaze_state_horizontal"] = final_horizontal
         data["gaze_state_vertical"] = final_vertical
 
-        # Debug prints
-        # print(f"Pitch offset: {pitch_offset:.2f}, Iris v-ratio: {avg_v:.2f}, Gaze vertical: {final_vertical}")
+        # Optional: debug prints
+        print(f"Pitch offset: {pitch_offset:.2f} → Vertical gaze: {final_vertical}")
+        print(f"Yaw: {yaw:.2f} → Horizontal gaze: {final_horizontal}")
 
         return data
 
