@@ -27,10 +27,10 @@ class eyeTracker:
             num_faces=1
         )
 
-        # ✅ Create detector
+        # Create detector
         self.detector = vision.FaceLandmarker.create_from_options(options)
 
-        # ✅ Store landmarks internally to avoid AttributeErrors
+        # Store landmarks internally to avoid AttributeErrors
         self.landmarks = None
 
     def track_eyes(self, frame):
@@ -46,11 +46,11 @@ class eyeTracker:
 
         result = self.detector.detect(mp_image)
 
-        # ✅ Always reset before detection
+        # Always reset before detection
         self.landmarks = None
 
         if result.face_landmarks:
-            # ✅ Store landmarks internally
+            # Store landmarks internally
             self.landmarks = result.face_landmarks[0]
 
             h, w, _ = frame.shape
@@ -58,14 +58,14 @@ class eyeTracker:
             left_iris = [474, 475, 476, 477]
             right_iris = [469, 470, 471, 472]
 
-            # ✅ Draw iris points using self.landmarks
+            # Draw iris points using self.landmarks
             for idx in left_iris + right_iris:
                 lm = self.landmarks[idx]
                 x = int(lm.x * w)
                 y = int(lm.y * h)
                 cv.circle(frame, (x, y), 2, (0, 255, 0), -1)
 
-        return frame  # ✅ Only return frame; landmarks stored in self.landmarks
+        return frame  # Only return frame; landmarks stored in self.landmarks
 
     def extract_eye_data(self, landmarks, frame):
         """
