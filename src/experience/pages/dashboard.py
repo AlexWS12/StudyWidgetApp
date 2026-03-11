@@ -5,6 +5,10 @@ from src.experience.button import Button
 class dashboard(QWidget):
     def __init__(self, parent: None):
         super().__init__(parent)
+
+        self.app = QApplication.instance()
+        self.data = self.app.database_reader.load_dashboard_data()
+
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
         self.layout.addWidget(QLabel("Dashboard"))
@@ -14,7 +18,6 @@ class dashboard(QWidget):
         self.layout.addWidget(start_btn)
     
     def start_session(self):
-        app = QApplication.instance()
-        app.main_window.hide()
-        app.pet_window.show()
-        app.position_pet_window()
+        self.app.main_window.hide()
+        self.app.pet_window.show()
+        self.app.position_pet_window()
