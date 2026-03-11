@@ -1,19 +1,18 @@
 # iris_tracker.py
-# Eye tracking using MediaPipe Face Mesh + Iris
+# Eye tracking using MediaPipe Face Landmarker + Iris
 
 import cv2 as cv
 import mediapipe as mp
 import os
+import numpy as np
 
 from mediapipe.tasks.python import vision
 from mediapipe.tasks.python import BaseOptions
 
 
 class eyeTracker:
-    """Detects iris landmarks using MediaPipe Face Landmarker."""
 
     def __init__(self):
-        """Load MediaPipe Face Landmarker model."""
 
         model_path = os.path.join(
             os.path.dirname(__file__),
@@ -27,16 +26,17 @@ class eyeTracker:
             num_faces=1
         )
 
-        # Create detector
         self.detector = vision.FaceLandmarker.create_from_options(options)
 
-        # Store landmarks internally to avoid AttributeErrors
         self.landmarks = None
+        self.neutral_pitch = None  # used for vertical calibration
+
+    # -----------------------------------------
 
     def track_eyes(self, frame):
-        """Detect iris landmarks and draw them on the frame."""
 
-        # Convert BGR → RGB
+        gaze_text = "Gaze: N/A"
+
         rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
 
         mp_image = mp.Image(
@@ -46,48 +46,68 @@ class eyeTracker:
 
         result = self.detector.detect(mp_image)
 
-        # Always reset before detection
         self.landmarks = None
 
         if result.face_landmarks:
-            # Store landmarks internally
+
             self.landmarks = result.face_landmarks[0]
+
+            data = self.extract_eye_data(self.landmarks, frame)
+
+            self.draw_head_pose(frame, self.landmarks)
 
             h, w, _ = frame.shape
 
             left_iris = [474, 475, 476, 477]
             right_iris = [469, 470, 471, 472]
 
-            # Draw iris points using self.landmarks
             for idx in left_iris + right_iris:
                 lm = self.landmarks[idx]
                 x = int(lm.x * w)
                 y = int(lm.y * h)
                 cv.circle(frame, (x, y), 2, (0, 255, 0), -1)
 
-        return frame  # Only return frame; landmarks stored in self.landmarks
+            gaze_text = f"Gaze: {data['gaze_state_horizontal']} {data['gaze_state_vertical']}"
+
+        cv.putText(
+            frame,
+            gaze_text,
+            (30, 40),
+            cv.FONT_HERSHEY_SIMPLEX,
+            1,
+            (0, 255, 0),
+            2
+        )
+
+        return frame
+
+    # -----------------------------------------
 
     def extract_eye_data(self, landmarks, frame):
-        """
-        Extract structured data from landmarks.
-        Returns a dictionary with iris positions, gaze state, and attention confidence.
-        """
+
         data = {
             "face_present": landmarks is not None,
             "eyes_detected": False,
             "left_iris": None,
             "right_iris": None,
             "gaze_state_horizontal": None,
-            "gaze_state_vertical": None,
-            "attention_confidence": None
+            "gaze_state_vertical": None
         }
 
         if landmarks is None:
-            return data  # no face detected
+            return data
 
         w, h = frame.shape[1], frame.shape[0]
 
-        # --- Iris landmarks in pixels ---
+        pitch, yaw, roll, _, _, _, _ = self.estimate_head_pose(landmarks, frame)
+
+        # calibrate neutral pitch once
+        if self.neutral_pitch is None:
+            self.neutral_pitch = pitch
+
+        pitch_offset = pitch - self.neutral_pitch
+
+        # --- Iris centers ---
         right_iris = landmarks[468]
         left_iris = landmarks[473]
 
@@ -98,49 +118,152 @@ class eyeTracker:
         data["right_iris"] = (rx, ry)
         data["left_iris"] = (lx, ly)
 
-        # --- Horizontal gaze calculation ---
+        # ---------------------------------
+        # Horizontal iris gaze
+        # ---------------------------------
+
         right_eye_left = int(landmarks[33].x * w)
         right_eye_right = int(landmarks[133].x * w)
+
         left_eye_left = int(landmarks[362].x * w)
         left_eye_right = int(landmarks[263].x * w)
 
         right_ratio = (rx - right_eye_left) / (right_eye_right - right_eye_left)
         left_ratio = (lx - left_eye_left) / (left_eye_right - left_eye_left)
-        avg_ratio_h = (right_ratio + left_ratio) / 2
 
-        if avg_ratio_h < 0.40:
-            data["gaze_state_horizontal"] = "left"
-        elif avg_ratio_h > 0.60:
-            data["gaze_state_horizontal"] = "right"
+        avg_ratio = (right_ratio + left_ratio) / 2
+
+        if avg_ratio < 0.40:
+            iris_horizontal = "left"
+        elif avg_ratio > 0.60:
+            iris_horizontal = "right"
         else:
-            data["gaze_state_horizontal"] = "center"
+            iris_horizontal = "center"
 
-        # --- Vertical gaze calculation ---
-        r_top = int(landmarks[159].y * h)
-        r_bottom = int(landmarks[145].y * h)
-        l_top = int(landmarks[386].y * h)
-        l_bottom = int(landmarks[374].y * h)
+        # ---------------------------------
+        # Head horizontal
+        # ---------------------------------
 
-        # Compute denominators safely
-        denominator_r = r_bottom - r_top
-        denominator_l = l_bottom - l_top
-
-        if denominator_r == 0 or denominator_l == 0:
-            avg_ratio_v = 0.5  # default to center if eye is closed
+        if yaw < -10:
+            head_horizontal = "left"
+        elif yaw > 10:
+            head_horizontal = "right"
         else:
-            right_vert = (ry - r_top) / denominator_r
-            left_vert = (ly - l_top) / denominator_l
-            avg_ratio_v = (right_vert + left_vert) / 2
+            head_horizontal = "center"
 
-        # Clamp ratio to [0, 1]
-        avg_ratio_v = max(0.0, min(1.0, avg_ratio_v))
+        # ---------------------------------
+        # Vertical from pitch offset
+        # ---------------------------------
 
-        # Map ratio to gaze direction
-        if avg_ratio_v < 0.33: #The 0.33 and 0.66 need to be tweaked to get the correct return values.
-            data["gaze_state_vertical"] = "up"
-        elif avg_ratio_v > 0.66:
-            data["gaze_state_vertical"] = "down"
+        if pitch_offset < -1.5:
+            head_vertical = "down"
+        elif pitch_offset > 1.5:
+            head_vertical = "up"
         else:
-            data["gaze_state_vertical"] = "center"
-        
+            head_vertical = "center"
+
+        # ---------------------------------
+        # Combine iris + head
+        # ---------------------------------
+
+        final_horizontal = iris_horizontal
+        final_vertical = head_vertical
+
+        if head_horizontal != "center":
+            final_horizontal = head_horizontal
+
+        data["gaze_state_horizontal"] = final_horizontal
+        data["gaze_state_vertical"] = final_vertical
+
         return data
+
+    # -----------------------------------------
+
+    def estimate_head_pose(self, landmarks, frame):
+
+        h, w = frame.shape[:2]
+
+        image_points = np.array([
+            (landmarks[1].x * w, landmarks[1].y * h),
+            (landmarks[152].x * w, landmarks[152].y * h),
+            (landmarks[33].x * w, landmarks[33].y * h),
+            (landmarks[263].x * w, landmarks[263].y * h),
+            (landmarks[61].x * w, landmarks[61].y * h),
+            (landmarks[291].x * w, landmarks[291].y * h)
+        ], dtype="double")
+
+        model_points = np.array([
+            (0.0, 0.0, 0.0),
+            (0.0, -63.6, -12.5),
+            (-43.3, 32.7, -26),
+            (43.3, 32.7, -26),
+            (-28.9, -28.9, -24),
+            (28.9, -28.9, -24)
+        ], dtype="double")
+
+        focal_length = w
+        center = (w / 2, h / 2)
+
+        camera_matrix = np.array([
+            [focal_length, 0, center[0]],
+            [0, focal_length, center[1]],
+            [0, 0, 1]
+        ], dtype="double")
+
+        dist_coeffs = np.zeros((4, 1))
+
+        success, rotation_vector, translation_vector = cv.solvePnP(
+            model_points,
+            image_points,
+            camera_matrix,
+            dist_coeffs
+        )
+
+        rotation_matrix, _ = cv.Rodrigues(rotation_vector)
+
+        pose_matrix = cv.hconcat((rotation_matrix, translation_vector))
+
+        _, _, _, _, _, _, euler_angles = cv.decomposeProjectionMatrix(pose_matrix)
+
+        pitch = float(euler_angles[0][0])
+        yaw = float(euler_angles[1][0])
+        roll = float(euler_angles[2][0])
+
+        pitch = (pitch + 180) % 360 - 180
+        yaw = (yaw + 180) % 360 - 180
+        roll = (roll + 180) % 360 - 180
+
+        return pitch, yaw, roll, rotation_vector, translation_vector, camera_matrix, dist_coeffs
+
+    # -----------------------------------------
+
+    def draw_head_pose(self, frame, landmarks):
+
+        pitch, yaw, roll, rotation_vector, translation_vector, camera_matrix, dist_coeffs = \
+            self.estimate_head_pose(landmarks, frame)
+
+        h, w = frame.shape[:2]
+
+        nose = (int(landmarks[1].x * w), int(landmarks[1].y * h))
+
+        axis = np.float32([
+            [100, 0, 0],
+            [0, 100, 0],
+            [0, 0, 100]
+        ])
+
+        imgpts, _ = cv.projectPoints(
+            axis,
+            rotation_vector,
+            translation_vector,
+            camera_matrix,
+            dist_coeffs
+        )
+
+        x_axis = tuple(imgpts[0].ravel().astype(int))
+        y_axis = tuple(imgpts[1].ravel().astype(int))
+        z_axis = tuple(imgpts[2].ravel().astype(int))
+
+        cv.line(frame, nose, x_axis, (0, 0, 255), 3)
+        cv.line(frame, nose, y_axis, (0, 255, 0), 3)
+        cv.line(frame, nose, z_axis, (255, 0, 0), 3)
