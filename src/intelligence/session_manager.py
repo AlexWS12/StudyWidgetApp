@@ -9,6 +9,9 @@ class SessionState(Enum):
     ENDED = "ended"
 
 class DistractionType(Enum):
+    # Canonical list of all distraction types tracked by the app.
+    # Used as keys in SEVERITY and distraction_data so there are no raw strings
+    # floating around — adding a new type here forces you to handle it everywhere.
     PHONE_DISTRACTION = "phone_distraction"
     LOOK_AWAY_DISTRACTION = "look_away_distraction"
     LEFT_DESK_DISTRACTION = "left_desk_distraction"
@@ -17,7 +20,8 @@ class DistractionType(Enum):
 
 # Severity weights for each distraction type used in score calculation.
 # Higher value = bigger penalty per event and per second distracted.
-# The severities are relative and can be adjusted based on feedback and testing.
+# Phone is the most penalized (intentional, high-impact) and idle the least (ambiguous).
+# If a new DistractionType is added above, a corresponding entry must be added here.
 SEVERITY = {
     DistractionType.PHONE_DISTRACTION:     1.00,
     DistractionType.APP_DISTRACTION:       0.75,
@@ -34,8 +38,9 @@ class SessionManager:
         self.session_state = SessionState.READY
         self.session_start_time = None
         self.session_end_time = None
-        # Each entry is {"type": DistractionType, "time": seconds}
-        # Populated by log_distraction() during the session
+        # Stores distraction events logged during the session.
+        # Each entry is {"type": DistractionType, "time": seconds}.
+        # Populated by log_distraction() and aggregated in end_session() before scoring.
         self.distraction_events = []
 
     def start_session(self):
@@ -52,8 +57,9 @@ class SessionManager:
         self.session_state = SessionState.IN_PROGRESS
 
     def log_distraction(self, dtype: DistractionType, duration_seconds: int):
-        # Called externally by whatever detects the distraction (camera, app monitor, etc.)
-        # dtype:            the type of distraction (must be a DistractionType enum value)
+        # Called by external detectors (camera, app monitor, etc.) whenever a distraction
+        # is detected and resolved. Appends to distraction_events for later aggregation.
+        # dtype:            which type of distraction occurred (DistractionType enum value)
         # duration_seconds: how long the distraction lasted in seconds
         if self.session_state != SessionState.IN_PROGRESS:
             raise Exception("Cannot log a distraction outside of an active session.")
@@ -66,8 +72,9 @@ class SessionManager:
         self.session_end_time = time.time()
         duration = int(self.session_end_time - self.session_start_time)
 
-        # Add raw distraction events into {DistractionType: {count, time}}
-        # so calculate_score can work with totals per type
+        # Aggregate raw distraction_events list into a dict keyed by DistractionType.
+        # Rolls up individual events into total count and total time per type,
+        # which is the format calculate_score expects.
         distraction_data = {}
         for event in self.distraction_events:
             dtype = event["type"]
@@ -78,7 +85,9 @@ class SessionManager:
 
         score = self.calculate_score(duration, distraction_data)
 
-        # Update the session record with end time, duration, and score
+        # Write end time, duration, and computed score back to the session row.
+        # Other columns (focused_time, distraction breakdowns, etc.) will be
+        # populated here once those tracking systems are in place.
         cursor = self.db.cursor()
         cursor.execute('''
             UPDATE sessions SET end_time=?, duration=?, score=? WHERE id=?
@@ -94,18 +103,26 @@ class SessionManager:
         self.session_state = SessionState.ENDED
 
     def calculate_score(self, duration, distraction_data=None):
-        # Score formula:  score = clamp(100 - penalty + duration_bonus, 0, 100)
+        # Computes a 0–100 focus score for the session.
         #
-        # penalty:        sum of per-type penalties, each weighted by severity.
-        #                 penalty combines a time component (proportional to session duration)
-        #                 and an event-count component so both frequency and length matter.
-        #                 Using a ratio (time_spent / duration) means the same 30s distraction
-        #                 hurts more in a 10-min session than a 90-min session.
+        # Formula: score = clamp(100 - penalty + duration_bonus, 0, 100)
         #
-        # duration_bonus: flat reward for longer sessions. Helps offset minor distractions
-        #                 in longer sessions and rewards sustained effort.
+        # penalty:
+        #   Sum of per-type penalties weighted by SEVERITY.
+        #   Each type contributes two components:
+        #     - time_ratio * 50: proportional penalty based on what fraction of the
+        #       session was spent distracted. The same 30s distraction hurts more in a
+        #       10-min session than a 90-min session.
+        #     - count * 2: flat penalty per event occurrence, so frequent brief
+        #       distractions are still penalized even if total time is low.
+        #   Both are multiplied by the type's SEVERITY weight.
         #
-        # Missing distraction types default to 0 (assumed no distractions of that type).
+        # duration_bonus:
+        #   Fixed flat bonus by session length tier. Rewards sustained effort and
+        #   helps offset minor distractions in longer sessions.
+        #   Tiers: <15m=0, 15–29m=+3, 30–59m=+5, 60–89m=+7, ≥90m=+10
+        #
+        # Untracked distraction types are assumed to be 0 (no distractions).
         if duration == 0:
             return 0
 
