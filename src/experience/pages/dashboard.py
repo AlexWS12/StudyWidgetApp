@@ -1,9 +1,10 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGridLayout
 from src.core.qApplication import QApplication
 from src.experience.button import Button
 
 from src.experience.widgets.petView import PetView
 from src.experience.widgets.calender import Calender
+from src.experience.widgets.avgFocusTime import avgFocusTime
 
 class dashboard(QWidget):
     def __init__(self, parent: None):
@@ -15,17 +16,23 @@ class dashboard(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
+        self.grid_layout = QGridLayout()
+        self.layout.addLayout(self.grid_layout)
+
         self.layout.addWidget(QLabel("Dashboard"))
+
+        self.avg_focus_time = avgFocusTime(self)
+        self.grid_layout.addWidget(self.avg_focus_time, 0, 0)
+
+        self.pet = PetView(self)
+        self.grid_layout.addWidget(self.pet, 0, 1)
+
+        self.calender = Calender(self)
+        self.grid_layout.addWidget(self.calender, 1, 0)
 
         start_btn = Button("Start Session")
         start_btn.clicked.connect(self.start_session)
         self.layout.addWidget(start_btn)
-
-        self.pet = PetView(self)
-        self.layout.addWidget(self.pet)
-
-        self.calender = Calender(self)
-        self.layout.addWidget(self.calender)
     
     def start_session(self):
         self.app.main_window.hide()
