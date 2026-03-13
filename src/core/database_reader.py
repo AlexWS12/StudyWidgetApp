@@ -1,5 +1,5 @@
 import sqlite3
-from src.intelligence.database import get_database
+from src.intelligence.database import Database
 
 def _row_to_dict(row):
     if row is None:
@@ -8,7 +8,7 @@ def _row_to_dict(row):
 
 class DatabaseReader:
     def __init__(self):
-        self.db = get_database()
+        self.db = Database()._get_connection()
 
     # get user info and stats
     def get_user_info(self):
@@ -41,7 +41,7 @@ class DatabaseReader:
         session_dates = self.get_session_dates()
         previous_session_data = self.get_previous_session_data()
         return {
-            "user_info": user_info if user_info else {},
+            "user_info": user_info if user_info else {}, 
             "session_dates": session_dates if session_dates else [],
             "previous_session_data": previous_session_data
         }
