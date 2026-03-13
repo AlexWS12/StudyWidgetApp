@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from src.core.qApplication import QApplication
 from src.experience.button import Button
+from src.experience.widgets.petView import PetView
 
 class dashboard(QWidget):
     def __init__(self, parent: None):
@@ -17,6 +18,9 @@ class dashboard(QWidget):
         start_btn = Button("Start Session")
         start_btn.clicked.connect(self.start_session)
         self.layout.addWidget(start_btn)
+
+        self.pet = PetView(self)
+        self.layout.addWidget(self.pet)
     
     def start_session(self):
         self.app.main_window.hide()
