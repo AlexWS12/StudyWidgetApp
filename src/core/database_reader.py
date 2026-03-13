@@ -14,7 +14,14 @@ class DatabaseReader:
     def get_user_info(self):
         cursor = self.db.cursor()
         cursor.execute('''
-            SELECT level, coins, exp, avg_focus_time, current_pet from user_stats where id = 1
+            SELECT avg_focus_time, current_pet from user_stats where id = 1
+        ''')
+        return _row_to_dict(cursor.fetchone())
+
+    def get_topbar_data(self):
+        cursor = self.db.cursor()
+        cursor.execute('''
+            SELECT level, coins, exp from user_stats where id = 1
         ''')
         return _row_to_dict(cursor.fetchone())
 
