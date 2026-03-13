@@ -3,7 +3,7 @@
 
 from ultralytics import YOLO
 import cv2 as cv
-from Trackers.iris_tracker import eyeTracker
+from Trackers.attention_tracker import gazeTracker
 from phone_calibration import PhoneCalibration
 
 
@@ -14,7 +14,7 @@ class Camera:
         """Initialize camera, YOLO model, and eye tracker."""
         self.model = YOLO(model_path)  # Load YOLO model for object detection
         self.cap = cv.VideoCapture(0)  # Open default webcam (index 0)
-        self.eye_tracker = eyeTracker()
+        self.eye_tracker = gazeTracker()
         self.detection_params = {"conf": 0.35}  # Default parameters
 
     def calibrate(self) -> bool:
