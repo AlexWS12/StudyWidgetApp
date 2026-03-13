@@ -1,6 +1,7 @@
 import cv2
 import math
 import numpy as np
+import os
 import time
 from ultralytics import YOLO
 
@@ -10,6 +11,8 @@ class PhoneCalibration:
 
     def __init__(self, model_path: str = "yolo26n.pt"):
         self.model = YOLO(model_path)  # Load the base detector once and reuse it for all calibration steps.
+        self.animations_dir = os.path.join(os.path.dirname(__file__), "assets", "animations")
+        self._animation_frames_cache = {}  # Stores per-direction rendered frame sequences.
         self.calibration_data = {
             "avg_confidence": 0.0,  # Mean confidence across accepted calibration samples.
             "optimal_conf_threshold": 0.5,  # Default fallback until calibration computes a better threshold.
@@ -17,6 +20,97 @@ class PhoneCalibration:
             "lighting_quality": "unknown",  # Qualitative label derived from average confidence.
             "calibrated": False,  # Flips to True only after enough usable samples are collected.
         }
+
+    def _load_rotation_frames(self, direction: str) -> list:
+        """Load and cache frames from the GIF rotation guide for this direction."""
+        if direction in self._animation_frames_cache:
+            return self._animation_frames_cache[direction]
+
+        gif_name = "rotate_phone_right.gif" if direction == "right" else "rotate_phone_left.gif"
+        gif_path = os.path.join(self.animations_dir, gif_name)
+        if not os.path.exists(gif_path):
+            self._animation_frames_cache[direction] = []
+            return []
+
+        frames = []
+        try:
+            from PIL import Image, ImageSequence
+
+            with Image.open(gif_path) as gif:
+                for gif_frame in ImageSequence.Iterator(gif):
+                    # Convert to RGBA first so transparent GIF pixels are composited predictably.
+                    rgba = gif_frame.convert("RGBA")
+                    bg = Image.new("RGBA", rgba.size, (18, 18, 18, 255))
+                    composed = Image.alpha_composite(bg, rgba)
+
+                    # OpenCV expects BGR; convert from PIL RGB before fitting.
+                    bgr = cv2.cvtColor(np.asarray(composed.convert("RGB")), cv2.COLOR_RGB2BGR)
+                    frames.append(self._fit_preview_frame(bgr, width=220, height=220))
+        except Exception:
+            frames = []
+
+        # Keep a readable fallback frame if decode fails.
+        if not frames:
+            fallback = np.full((220, 220, 3), 20, dtype=np.uint8)
+            cv2.putText(fallback, "Preview unavailable", (20, 112),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (180, 180, 180), 1, cv2.LINE_AA)
+            frames = [fallback]
+
+        self._animation_frames_cache[direction] = frames
+        return frames
+
+    def _fit_preview_frame(self, frame, width: int, height: int):
+        """Resize preview frame with letterboxing so aspect ratio is preserved."""
+        h, w = frame.shape[:2]
+        if h <= 0 or w <= 0:
+            return np.full((height, width, 3), 20, dtype=np.uint8)
+
+        scale = min(width / w, height / h)
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
+        resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+        canvas = np.full((height, width, 3), 18, dtype=np.uint8)
+        x = (width - new_w) // 2
+        y = (height - new_h) // 2
+        canvas[y:y + new_h, x:x + new_w] = resized
+        return canvas
+
+    def _draw_rotation_preview(self, frame, direction: str, elapsed_seconds: float):
+        """Overlay the right/left GIF preview in the calibration frame."""
+        frames = self._load_rotation_frames(direction)
+        preview = None
+        if frames:
+            fps = 8.0  # Preview playback speed for guidance.
+            idx = int((elapsed_seconds * fps) % len(frames))
+            preview = frames[idx]
+        h, w = frame.shape[:2]
+
+        panel_w, panel_h = 236, 260
+        x1 = max(10, w - panel_w - 12)
+        y1 = 110
+        x2 = x1 + panel_w
+        y2 = min(h - 10, y1 + panel_h)
+
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (x1, y1), (x2, y2), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 200, 255), 2)
+
+        title = "RIGHT ROTATION PREVIEW" if direction == "right" else "LEFT ROTATION PREVIEW"
+        cv2.putText(frame, title, (x1 + 8, y1 + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 200, 255), 1)
+
+        if preview is not None and (y1 + 32 + preview.shape[0]) <= y2:
+            py1 = y1 + 32
+            py2 = py1 + preview.shape[0]
+            px1 = x1 + 8
+            px2 = px1 + preview.shape[1]
+            frame[py1:py2, px1:px2] = preview
+        else:
+            cv2.putText(frame, "Preview unavailable", (x1 + 24, y1 + 130),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (200, 200, 200), 2)
+            cv2.putText(frame, "Could not decode GIF", (x1 + 26, y1 + 158),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
 
     def _get_guide_box(self, frame_shape):
         """Return a centered guide box where the phone should be placed."""
@@ -277,6 +371,10 @@ class PhoneCalibration:
             phase_start = time.time()
             valid_frames = 0
             phase_start_x = None
+            rotation_phase = phase["kind"] in ("right_rotation", "left_rotation")
+            recenter_ready = not rotation_phase
+            recenter_hold_frames = 0
+            recenter_required_frames = 5
 
             while True:
                 ret, frame = cap.read()
@@ -296,6 +394,8 @@ class PhoneCalibration:
                 if phase["kind"] in ("right_rotation", "left_rotation"):
                     direction = "right" if phase["kind"] == "right_rotation" else "left"
                     self._draw_rotation_arrow(frame, direction, guide_box)
+                    phase_elapsed = time.time() - phase_start
+                    self._draw_rotation_preview(frame, direction, phase_elapsed)
 
                 elapsed = time.time() - phase_start
                 remaining = max(0, int(phase["max_seconds"] - elapsed))
@@ -318,8 +418,32 @@ class PhoneCalibration:
                         conf = float(best_box.conf[0])
                         metrics = self._box_metrics(best_box, frame.shape)
 
-                        if phase_start_x is None:
-                            phase_start_x = metrics["center_x_norm"]
+                        # Rotation phases must start from a fresh centered pose.
+                        if rotation_phase and baseline is not None and not recenter_ready:
+                            centered_now = (
+                                in_box
+                                and metrics["aspect_ratio"] >= 1.1
+                                and metrics["width_norm"] >= baseline["width_norm"] * 0.90
+                                and metrics["area_ratio"] >= baseline["area_ratio"] * 0.85
+                            )
+                            if centered_now:
+                                recenter_hold_frames += 1
+                            else:
+                                recenter_hold_frames = 0
+
+                            cv2.putText(
+                                frame,
+                                f"Center first: {recenter_hold_frames}/{recenter_required_frames}",
+                                (10, h - 78),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.65,
+                                (0, 200, 255),
+                                2,
+                            )
+
+                            if recenter_hold_frames >= recenter_required_frames:
+                                recenter_ready = True
+                                phase_start_x = metrics["center_x_norm"]
 
                         is_valid = False
 
@@ -329,10 +453,14 @@ class PhoneCalibration:
                             if is_valid:
                                 baseline_metrics.append(metrics)
 
-                        elif phase["kind"] == "right_rotation" and baseline is not None:
+                        elif phase["kind"] == "right_rotation" and baseline is not None and recenter_ready:
+                            if phase_start_x is None:
+                                phase_start_x = metrics["center_x_norm"]
                             is_valid = in_box and self._rotation_valid(metrics, baseline, "right", phase_start_x)
 
-                        elif phase["kind"] == "left_rotation" and baseline is not None:
+                        elif phase["kind"] == "left_rotation" and baseline is not None and recenter_ready:
+                            if phase_start_x is None:
+                                phase_start_x = metrics["center_x_norm"]
                             is_valid = in_box and self._rotation_valid(metrics, baseline, "left", phase_start_x)
 
                         if in_box:
@@ -384,6 +512,8 @@ class PhoneCalibration:
                         phase_start = time.time()
                         valid_frames = 0
                         phase_start_x = None
+                        recenter_ready = not rotation_phase
+                        recenter_hold_frames = 0
                         if phase["kind"] == "steady":
                             baseline_metrics.clear()  # Discard stale baseline samples before re-collecting.
                         continue
