@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 
-class avgFocusTime(QWidget, parent):
+class avgFocusTime(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.layout = QVBoxLayout()
