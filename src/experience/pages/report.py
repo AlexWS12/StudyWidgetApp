@@ -1,5 +1,6 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGridLayout
 from src.core.qApplication import QApplication
+from src.experience.widgets.lifetime_focus import lifetime_focus
 
 class report(QWidget):
     def __init__(self, parent: None):
@@ -8,6 +9,6 @@ class report(QWidget):
         self.app = QApplication.instance()
         self.data = self.app.database_reader.load_report_data()
 
-        self.layout = QVBoxLayout()
+        self.layout = QGridLayout()
         self.setLayout(self.layout)
-        self.layout.addWidget(QLabel("Report"))
+        self.layout.addWidget(lifetime_focus(self), 0, 0)
