@@ -5,6 +5,7 @@ from src.experience.button import Button
 from src.experience.widgets.petView import PetView
 from src.experience.widgets.calender import Calender
 from src.experience.widgets.avgFocusTime import avgFocusTime
+from src.experience.widgets.previousSession import previousSession
 
 class dashboard(QWidget):
     def __init__(self, parent: None):
@@ -16,10 +17,10 @@ class dashboard(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
+        self.layout.addWidget(QLabel("Dashboard"))
+
         self.grid_layout = QGridLayout()
         self.layout.addLayout(self.grid_layout)
-
-        self.layout.addWidget(QLabel("Dashboard"))
 
         self.avg_focus_time = avgFocusTime(self)
         self.grid_layout.addWidget(self.avg_focus_time, 0, 0)
@@ -29,6 +30,9 @@ class dashboard(QWidget):
 
         self.calender = Calender(self)
         self.grid_layout.addWidget(self.calender, 1, 0)
+
+        self.previous_session = previousSession(self)
+        self.grid_layout.addWidget(self.previous_session, 1, 1)
 
         start_btn = Button("Start Session")
         start_btn.clicked.connect(self.start_session)

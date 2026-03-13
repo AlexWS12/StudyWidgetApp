@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGridLayout
 from src.core.qApplication import QApplication
 from src.experience.widgets.lifetime_focus import lifetime_focus
+from src.experience.widgets.totalSessions import totalSessions
 
 class report(QWidget):
     def __init__(self, parent: None):
@@ -12,3 +13,4 @@ class report(QWidget):
         self.layout = QGridLayout()
         self.setLayout(self.layout)
         self.layout.addWidget(lifetime_focus(self), 0, 0)
+        self.layout.addWidget(totalSessions(self), 0, 1)
