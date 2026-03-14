@@ -1,4 +1,7 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout
+
+from src.experience.widgets.centered_label import CenteredLabel
+
 
 class LongestFocus(QWidget):
     def __init__(self, parent):
@@ -6,5 +9,5 @@ class LongestFocus(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
-        self.layout.addWidget(QLabel("Longest Focus:"))
-        self.layout.addWidget(QLabel(f"{parent.data['session_analytics']['longest_focus_seconds']} seconds"))
+        self.layout.addWidget(CenteredLabel("Longest Focus"))
+        self.layout.addWidget(CenteredLabel(f"{parent.data['session_analytics']['longest_focus_seconds']} seconds"))

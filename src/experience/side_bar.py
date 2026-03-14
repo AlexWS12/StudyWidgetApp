@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout
 from src.experience.button import Button
 
 from typing import TYPE_CHECKING # avoid circular imports

@@ -1,4 +1,7 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout
+
+from src.experience.widgets.centered_label import CenteredLabel
+
 
 class AvgFocusTime(QWidget):
     def __init__(self, parent):
@@ -6,6 +9,5 @@ class AvgFocusTime(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
-        self.layout.addWidget(QLabel("Average Focus Time:"))
-
-        self.layout.addWidget(QLabel(f"{parent.data['user_info']['avg_focus_time']} minutes"))
+        self.layout.addWidget(CenteredLabel("Average Focus Time"))
+        self.layout.addWidget(CenteredLabel(f"{parent.data['user_info']['avg_focus_time']} minutes"))

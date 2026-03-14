@@ -1,4 +1,7 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout
+
+from src.experience.widgets.centered_label import CenteredLabel
+
 
 class TotalSessions(QWidget):
     def __init__(self, parent):
@@ -6,5 +9,5 @@ class TotalSessions(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
-        self.layout.addWidget(QLabel("Total Sessions:"))
-        self.layout.addWidget(QLabel(f"{parent.data['session_analytics']['total_sessions']}"))
+        self.layout.addWidget(CenteredLabel("Total Sessions"))
+        self.layout.addWidget(CenteredLabel(f"{parent.data['session_analytics']['total_sessions']}"))

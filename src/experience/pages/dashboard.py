@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGridLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QGridLayout
 from src.core.qApplication import QApplication
 from src.experience.button import Button
 
@@ -31,7 +31,7 @@ class Dashboard(QWidget):
         self.PetView = PetView(self)
         self.grid_layout.addWidget(self.PetView, 0, 1)
 
-        self.Calender = Calendar(self)
+        self.Calendar = Calendar(self)
         self.grid_layout.addWidget(self.Calendar, 1, 0)
 
         self.PreviousSession = PreviousSession(self)

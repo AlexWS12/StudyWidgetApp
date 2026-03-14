@@ -1,4 +1,7 @@
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QHBoxLayout
+
+from src.experience.widgets.centered_label import CenteredLabel
+
 
 class TopBar(QWidget):
     def __init__(self, parent):
@@ -8,10 +11,10 @@ class TopBar(QWidget):
         self.layout = QHBoxLayout()
         self.setLayout(self.layout)
 
-        # Initilize widget labels
-        self.level = QLabel(f"Level {parent.data['level']}")
-        self.exp = QLabel(f"{parent.data['exp']} xp")
-        self.coin = QLabel(f"{parent.data['coins']} coins")
+        # Initialize widget labels
+        self.level = CenteredLabel(f"Level {parent.data['level']}")
+        self.exp = CenteredLabel(f"{parent.data['exp']} xp")
+        self.coin = CenteredLabel(f"{parent.data['coins']} coins")
 
         # Add Widget to layout
         self.layout.addWidget(self.level)

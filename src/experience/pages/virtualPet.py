@@ -1,4 +1,7 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout
+
+from src.experience.widgets.centered_label import CenteredLabel
+
 
 class VirtualPet(QWidget):
     def __init__(self, parent: None):
@@ -7,4 +10,4 @@ class VirtualPet(QWidget):
         # layout for the virtual pet
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
-        self.layout.addWidget(QLabel("Virtual Pet"))
+        self.layout.addWidget(CenteredLabel("Virtual Pet"))

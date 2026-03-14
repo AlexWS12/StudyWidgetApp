@@ -1,6 +1,8 @@
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QApplication
+from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QApplication
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, QEvent
+
+from src.experience.widgets.centered_label import CenteredLabel
 
 class petWindow(QMainWindow):
     def __init__(self):
@@ -18,7 +20,7 @@ class petWindow(QMainWindow):
         self.image = QPixmap("src/experience/static/Panther.png")
 
         # Display the image inside a label
-        self.label = QLabel()
+        self.label = CenteredLabel("")
 
         # Scale the image to 80x80 pixels while maintaining aspect ratio
         scaled = self.image.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
