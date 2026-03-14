@@ -2,12 +2,12 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGridLayout
 from src.core.qApplication import QApplication
 from src.experience.button import Button
 
-from src.experience.widgets.petView import PetView
+from src.experience.widgets.pet_view import PetView
 from src.experience.widgets.calender import Calender
-from src.experience.widgets.avgFocusTime import avgFocusTime
-from src.experience.widgets.previousSession import previousSession
+from src.experience.widgets.avg_focus_time import AvgFocusTime
+from src.experience.widgets.previous_session import PreviousSession
 
-class dashboard(QWidget):
+class Dashboard(QWidget):
     def __init__(self, parent: None):
         super().__init__(parent)
 
@@ -20,17 +20,17 @@ class dashboard(QWidget):
         self.grid_layout = QGridLayout()
         self.layout.addLayout(self.grid_layout)
 
-        self.avg_focus_time = avgFocusTime(self)
-        self.grid_layout.addWidget(self.avg_focus_time, 0, 0)
+        self.AvgFocusTime = AvgFocusTime(self)
+        self.grid_layout.addWidget(self.AvgFocusTime, 0, 0)
 
-        self.pet = PetView(self)
-        self.grid_layout.addWidget(self.pet, 0, 1)
+        self.PetView = PetView(self)
+        self.grid_layout.addWidget(self.PetView, 0, 1)
 
-        self.calender = Calender(self)
-        self.grid_layout.addWidget(self.calender, 1, 0)
+        self.Calender = Calender(self)
+        self.grid_layout.addWidget(self.Calender, 1, 0)
 
-        self.previous_session = previousSession(self)
-        self.grid_layout.addWidget(self.previous_session, 1, 1)
+        self.PreviousSession = PreviousSession(self)
+        self.grid_layout.addWidget(self.PreviousSession, 1, 1)
 
         start_btn = Button("Start Session")
         start_btn.clicked.connect(self.start_session)
