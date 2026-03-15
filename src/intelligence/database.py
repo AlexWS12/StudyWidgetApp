@@ -130,6 +130,30 @@ class Database:
         cursor.execute("INSERT OR IGNORE INTO user_stats (id) VALUES (1)")
 
 
+    def _update_user_stats_table(self):
+        # Adds any columns missing from an existing user_stats table.
+        # Safe to run on a fresh DB (all columns already present, nothing to do).
+        cursor = self._get_connection().cursor()
+        cursor.execute("PRAGMA table_info(user_stats)")
+        existing = {row["name"] for row in cursor.fetchall()}
+        additions = [
+            ("level",              "INTEGER DEFAULT 1"),
+            ("avg_focus_time",     "REAL    DEFAULT 0.0"),
+            ("total_sessions",     "INTEGER DEFAULT 0"),
+            ("total_time_spent",   "INTEGER DEFAULT 0"),
+            ("coins",              "INTEGER DEFAULT 0"),
+            ("exp",                "INTEGER DEFAULT 0"),
+            ("total_distractions", "INTEGER DEFAULT 0"),
+            ("total_look_aways",   "INTEGER DEFAULT 0"),
+            ("current_pet",        "TEXT    DEFAULT 'default'"),
+            ("created_at",         "TEXT"),
+            ("updated_at",         "TEXT"),
+        ]
+        for col, definition in additions:
+            if col not in existing:
+                cursor.execute(f"ALTER TABLE user_stats ADD COLUMN {col} {definition}")
+
+
     def _create_events_table(self):
         cursor = self._get_connection().cursor()
 
