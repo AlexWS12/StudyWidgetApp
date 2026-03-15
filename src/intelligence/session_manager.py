@@ -1,4 +1,5 @@
 import time
+import math
 from enum import Enum
 from database import get_database
 
@@ -31,6 +32,17 @@ SEVERITY = {
 }
 
 
+def _calculate_level(exp):
+    # Maps cumulative XP to a level using ceil(exp / 110).
+    # Calibrated so that exp=770 → level=7 (matches mock data; 770/110 = 7.0 exactly).
+    # Level 1 is the floor — a player at 0 XP is still level 1, not level 0.
+    # Every 110 XP earned crosses a level boundary:
+    #   0–110 XP → level 1,  111–220 → level 2,  700–770 → level 7, etc.
+    if exp <= 0:
+        return 1
+    return max(1, math.ceil(exp / 110))
+
+
 class SessionManager:
     def __init__(self):
         self.db = get_database()
@@ -42,6 +54,11 @@ class SessionManager:
         # Each entry is {"type": DistractionType, "time": seconds}.
         # Populated by log_distraction() and aggregated in end_session() before scoring.
         self.distraction_events = []
+        # Pause tracking: total_pause_duration accumulates across all pause/resume
+        # cycles; pause_start_time captures when the current pause began (None when
+        # not paused). Both are subtracted from wall-clock time in end_session().
+        self.total_pause_duration = 0
+        self.pause_start_time = None
 
     def reset(self):
         # Resets all session state back to defaults, allowing the instance to be reused.
@@ -52,6 +69,11 @@ class SessionManager:
         self.session_start_time = None
         self.session_end_time = None
         self.distraction_events = []
+        # Pause tracking: total_pause_duration accumulates across all pause/resume
+        # cycles; pause_start_time captures when the current pause began (None when
+        # not paused). Both are subtracted from wall-clock time in end_session().
+        self.total_pause_duration = 0
+        self.pause_start_time = None
 
     def start_session(self):
         if self.session_state != SessionState.READY:
@@ -64,6 +86,26 @@ class SessionManager:
         ''', (time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(self.session_start_time)),))
         self.db.commit()
         self.current_session_id = cursor.lastrowid
+        self.session_state = SessionState.IN_PROGRESS
+
+    def pause_session(self):
+        # Transitions an active session into the PAUSED state and records the
+        # wall-clock time the pause began. Only valid from IN_PROGRESS.
+        # No DB write happens here — the session row is only finalized in end_session().
+        if self.session_state != SessionState.IN_PROGRESS:
+            raise Exception("Can only pause an active session.")
+        self.pause_start_time = time.time()
+        self.session_state = SessionState.PAUSED
+
+    def resume_session(self):
+        # Closes the current pause segment by accumulating its duration into
+        # total_pause_duration, then returns to IN_PROGRESS.
+        # Clearing pause_start_time signals that no pause is currently open,
+        # preventing double-counting if end_session() checks the variable.
+        if self.session_state != SessionState.PAUSED:
+            raise Exception("Can only resume a paused session.")
+        self.total_pause_duration += int(time.time() - self.pause_start_time)
+        self.pause_start_time = None
         self.session_state = SessionState.IN_PROGRESS
 
     def log_distraction(self, dtype: DistractionType, duration_seconds: int):
@@ -80,7 +122,16 @@ class SessionManager:
             raise Exception("No active session to end.")
 
         self.session_end_time = time.time()
-        duration = int(self.session_end_time - self.session_start_time)
+
+        # If the session is being ended while paused, the active pause segment was
+        # never closed by resume_session(). Close it here so the time is accounted for.
+        if self.session_state == SessionState.PAUSED and self.pause_start_time is not None:
+            self.total_pause_duration += int(self.session_end_time - self.pause_start_time)
+            self.pause_start_time = None
+
+        # Subtract all paused time from wall-clock elapsed to get the true session duration.
+        # max(0, ...) guards against clock skew producing a negative value.
+        duration = max(0, int(self.session_end_time - self.session_start_time) - self.total_pause_duration)
 
         # Aggregate raw distraction_events list into a dict keyed by DistractionType.
         # Rolls up individual events into total count and total time per type,
@@ -119,9 +170,11 @@ class SessionManager:
         total_events     = sum(d["count"] for d in distraction_data.values())
         focus_percentage = round((focused_time / duration) * 100, 1) if duration > 0 else 0
 
-        # Write all populated columns back to the session row in one update.
-        # points_earned and coins_earned are left at their defaults (0) until
-        # the rewards system is implemented.
+        # Calculate XP and coins earned for this session based on score and duration.
+        points_earned, coins_earned = self._calculate_rewards(score, duration)
+
+        # Write all populated columns back to the session row in one update,
+        # including the newly computed points_earned and coins_earned.
         cursor = self.db.cursor()
         cursor.execute('''
             UPDATE sessions SET
@@ -130,7 +183,8 @@ class SessionManager:
                 time_away=?, look_away_time=?,
                 phone_distractions=?, look_away_distractions=?,
                 left_desk_distractions=?, app_distractions=?, idle_distractions=?,
-                focus_percentage=?
+                focus_percentage=?,
+                points_earned=?, coins_earned=?
             WHERE id=?
         ''', (
             time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(self.session_end_time)),
@@ -139,13 +193,83 @@ class SessionManager:
             time_away, look_away_time,
             phone_count, look_away_count, left_desk_count, app_count, idle_count,
             focus_percentage,
+            points_earned, coins_earned,
             self.current_session_id
         ))
         self.db.commit()
 
+        # Update the singleton user_stats row with this session's contributions.
+        # Called after the sessions commit so session data is safely stored first.
+        self._update_user_stats(duration, points_earned, coins_earned, total_events, look_away_count)
+
         self.session_state = SessionState.ENDED
         # Session data is intentionally kept in memory (current_session_id, distraction_events)
         # until reset() is explicitly called, so session_report() can still be accessed after end.
+
+    def _calculate_rewards(self, score, duration):
+        # Calculates XP (points_earned) and coins for a completed session.
+        # Both scale with score * duration_minutes so longer, higher-quality
+        # sessions earn disproportionately more — rewarding sustained focus.
+        #
+        # Constants calibrated against mock data (7 sessions → 770 XP, 177 coins):
+        #   K_POINTS = 0.0175  ->  standard 75-min/score-80 session ≈ 105 XP
+        #   K_COINS  = 0.004   ->  coins-to-XP ratio ≈ 23%, matching mock (177/770)
+        #
+        # Floor of 1 ensures even a zero-score or very short session earns something.
+        K_POINTS = 0.0175
+        K_COINS  = 0.004
+        duration_minutes = duration / 60.0
+        points_earned = max(1, round(score * duration_minutes * K_POINTS))
+        coins_earned  = max(1, round(score * duration_minutes * K_COINS))
+        return points_earned, coins_earned
+
+    def _update_user_stats(self, duration, points_earned, coins_earned, total_events, look_away_count):
+        # Updates the singleton user_stats row (id=1) after a session completes.
+        # Reads the current row first so incremental values are computed in Python —
+        # this avoids NULL-accumulation bugs and makes the logic explicit.
+        # A single UPDATE ensures all stat changes are written atomically.
+        cursor = self.db.cursor()
+
+        # Read current snapshot of all fields we'll be incrementing
+        cursor.execute('''
+            SELECT total_sessions, total_time_spent, exp, coins,
+                   total_distractions, total_look_aways
+            FROM user_stats WHERE id = 1
+        ''')
+        row = cursor.fetchone()
+
+        # Compute new values by adding session deltas to existing totals
+        new_total_sessions     = row["total_sessions"]     + 1
+        new_total_time_spent   = row["total_time_spent"]   + duration
+        new_exp                = row["exp"]                + points_earned
+        new_coins              = row["coins"]              + coins_earned
+        new_total_distractions = row["total_distractions"] + total_events
+        new_total_look_aways   = row["total_look_aways"]   + look_away_count
+
+        # avg_focus_time recalculated from totals — more accurate than maintaining
+        # a running average incrementally, which can drift across data imports
+        new_avg_focus_time = new_total_time_spent / new_total_sessions
+
+        # Level is always derived from cumulative exp — never stored independently
+        new_level = _calculate_level(new_exp)
+
+        now_str = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())
+
+        # Write all changes in a single UPDATE to keep user_stats consistent.
+        # current_pet and created_at are intentionally left untouched — they are
+        # managed by other subsystems.
+        cursor.execute('''
+            UPDATE user_stats SET
+                total_sessions=?, total_time_spent=?, exp=?, coins=?,
+                total_distractions=?, total_look_aways=?,
+                avg_focus_time=?, level=?, updated_at=?
+            WHERE id = 1
+        ''', (
+            new_total_sessions, new_total_time_spent, new_exp, new_coins,
+            new_total_distractions, new_total_look_aways,
+            new_avg_focus_time, new_level, now_str
+        ))
+        self.db.commit()
 
     def calculate_score(self, duration, distraction_data=None):
         # Computes a 0–100 focus score for the session.
