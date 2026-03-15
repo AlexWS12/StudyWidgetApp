@@ -20,7 +20,9 @@ class Database:
     def _init_db(self):
         self._get_connection()  # Ensure connection is established
         self._create_sessions_table()
+        self._update_sessions_table()
         self._create_user_stats_table()
+        self._update_user_stats_table()
         self._create_events_table()
         self._create_achievements_table()
         self.conn.commit()
@@ -74,6 +76,21 @@ class Database:
             )
         ''')
 
+
+
+    def _update_sessions_table(self):
+        # Adds any columns missing from an existing sessions table.
+        # Safe to run on a fresh DB (all columns already present, nothing to do).
+        cursor = self._get_connection().cursor()
+        cursor.execute("PRAGMA table_info(sessions)")
+        existing = {row["name"] for row in cursor.fetchall()}
+        additions = [
+            ("status",          "TEXT    DEFAULT 'in_progress'"),
+            ("paused_duration", "INTEGER DEFAULT 0"),
+        ]
+        for col, definition in additions:
+            if col not in existing:
+                cursor.execute(f"ALTER TABLE sessions ADD COLUMN {col} {definition}")
 
 
     def _create_user_stats_table(self):
