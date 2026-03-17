@@ -6,6 +6,7 @@ from src.experience.pages.session import Session
 from src.experience.pages.report import Report
 from src.experience.pages.virtualPet import VirtualPet
 from src.experience.pages.achievements import Achievements
+from src.experience.pages.settings import Settings
 from src.experience.widgets.top_bar import TopBar
 
 class MainWindow(QMainWindow):
@@ -48,6 +49,7 @@ class MainWindow(QMainWindow):
         self.pages_stack.addWidget(Report(self))
         self.pages_stack.addWidget(VirtualPet(self))
         self.pages_stack.addWidget(Achievements(self))
+        self.pages_stack.addWidget(Settings(self))
         self.pages_stack.setCurrentIndex(0)
         
         self.topbar_pages_layout.addWidget(self.pages_stack)
