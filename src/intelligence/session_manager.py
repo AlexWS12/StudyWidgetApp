@@ -51,7 +51,7 @@ class SessionManager:
         self.session_start_time = None
         self.session_end_time = None
         # Stores distraction events logged during the session.
-        # Each entry is {"type": DistractionType, "time": seconds}.
+        # Each entry is {"type": DistractionType, "time": seconds, "timestamp" : Time}.
         # Populated by log_distraction() and aggregated in end_session() before scoring.
         self.distraction_events = []
         # Pause tracking: total_pause_duration accumulates across all pause/resume
@@ -115,7 +115,11 @@ class SessionManager:
         # duration_seconds: how long the distraction lasted in seconds
         if self.session_state != SessionState.IN_PROGRESS:
             raise Exception("Cannot log a distraction outside of an active session.")
-        self.distraction_events.append({"type": dtype, "time": duration_seconds})
+        self.distraction_events.append({
+            "type": dtype,
+            "time": duration_seconds, 
+            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())
+            })
 
     def end_session(self):
         if self.session_state not in [SessionState.IN_PROGRESS, SessionState.PAUSED]:
@@ -196,11 +200,14 @@ class SessionManager:
             points_earned, coins_earned,
             self.current_session_id
         ))
-        self.db.commit()
 
         # Update the singleton user_stats row with this session's contributions.
         # Called after the sessions commit so session data is safely stored first.
         self._update_user_stats(duration, points_earned, coins_earned, total_events, look_away_count)
+
+        self._update_events_table()
+
+        self.db.commit()
 
         self.session_state = SessionState.ENDED
         # Session data is intentionally kept in memory (current_session_id, distraction_events)
@@ -269,7 +276,19 @@ class SessionManager:
             new_total_distractions, new_total_look_aways,
             new_avg_focus_time, new_level, now_str
         ))
-        self.db.commit()
+    
+    def _update_events_table(self):
+        cursor = self.db.cursor()
+        for event in self.distraction_events:
+            cursor.execute('''
+                INSERT INTO events (session_id, event_type, timestamp, duration)
+                VALUES (?, ?, ?, ?)
+            ''', (
+                self.current_session_id,
+                event["type"].value,
+                event["timestamp"],
+                event["time"]
+            ))
 
     def calculate_score(self, duration, distraction_data=None):
         # Computes a 0–100 focus score for the session.
