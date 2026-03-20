@@ -10,8 +10,9 @@ class PhoneCalibration:
 
     def __init__(self, model_path: str = "yolo26n.pt"):
         self.model = YOLO(model_path)  # Load the base detector once and reuse it for all calibration steps.
-        self.animations_dir = os.path.join(os.path.dirname(__file__), "assets", "animations")
-        self.few_shot_bundle_path = os.path.join(os.path.dirname(__file__), "phone_few_shot_bundle.npz")
+        # __file__ is now detectors/phone_calibration.py; go up one level to reach the vision root
+        self.animations_dir = os.path.join(os.path.dirname(__file__), "..", "assets", "animations")
+        self.few_shot_bundle_path = os.path.join(os.path.dirname(__file__), "..", "phone_few_shot_bundle.npz")
         self._animation_frames_cache = {}  # Stores per-direction rendered frame sequences.
         # [INTELLIGENCE TEAM] calibration_data is the primary output of the calibration process.
         # get_optimal_params() packages these values into runtime detection settings for the
@@ -35,7 +36,9 @@ class PhoneCalibration:
     @staticmethod
     def get_few_shot_bundle_path() -> str:
         """Return the persisted few-shot bundle path shared by calibrator and runtime camera."""
-        return os.path.join(os.path.dirname(__file__), "phone_few_shot_bundle.npz")
+        # Bundle lives at the vision root (one level up from detectors/) so calibrator
+        # and camera.py both resolve to the same shared file.
+        return os.path.join(os.path.dirname(__file__), "..", "phone_few_shot_bundle.npz")
 
     def _load_rotation_frames(self, direction: str) -> list:
         """Load and cache frames from the GIF rotation guide for this direction."""

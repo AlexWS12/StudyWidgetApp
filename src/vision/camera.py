@@ -8,7 +8,7 @@ import os
 import sys
 import time
 from Trackers.attention_tracker import gazeTracker
-from phone_calibration import PhoneCalibration
+from detectors.phone_calibration import PhoneCalibration
 
 # Import DistractionType from the sibling intelligence package.
 # Resolves via __file__ so it works whether camera is run directly (src/vision on path)

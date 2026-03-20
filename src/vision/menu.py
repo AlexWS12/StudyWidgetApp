@@ -6,7 +6,7 @@ import questionary
 import msvcrt
 
 from camera import Camera
-from phone_calibration import PhoneCalibration
+from detectors.phone_calibration import PhoneCalibration
 from Trackers.gaze_calibration import GazeCalibrator
 
 

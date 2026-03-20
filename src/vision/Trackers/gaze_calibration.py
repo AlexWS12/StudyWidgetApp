@@ -3,7 +3,7 @@ import mediapipe as mp
 import numpy as np
 import time
 
-from Trackers.attention_tracker import gazeTracker
+from .attention_tracker import gazeTracker  # relative import: both files are in the trackers package
 
 
 class GazeCalibrator:

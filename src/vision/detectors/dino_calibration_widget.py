@@ -30,7 +30,7 @@ except ImportError as _e:
         "Install with: pip install PySide6"
     ) from _e
 
-from dino_calibration import DinoCalibration, CAPTURE_STEPS
+from detectors.dino_calibration import DinoCalibration, CAPTURE_STEPS
 
 
 # ── camera worker thread ───────────────────────────────────────────────────────
