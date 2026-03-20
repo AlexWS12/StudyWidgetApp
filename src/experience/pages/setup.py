@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout
 from src.experience.widgets.centered_label import CenteredLabel
 from src.experience.button import Button
 from src.core.qApplication import QApplication
+from src.experience.widgets.vision_stream import VisionStream
 
 class Setup(QWidget):
     def __init__(self, parent: None):
@@ -11,13 +12,24 @@ class Setup(QWidget):
 
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
-        self.layout.addWidget(CenteredLabel("Setup"))
+
+
+        self.vision_stream = VisionStream()
+        self.layout.addWidget(self.vision_stream)
 
         # add start session button to the layout
         start_btn = Button("Start Session")
         start_btn.setObjectName("startSessionButton")
         start_btn.clicked.connect(self.start_session)
         self.layout.addWidget(start_btn)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.vision_stream.start_stream()
+
+    def hideEvent(self, event):
+        self.vision_stream.stop_stream()
+        super().hideEvent(event)
 
     # start session and show the pet window
     def start_session(self):

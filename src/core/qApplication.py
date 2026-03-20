@@ -4,6 +4,7 @@ from PySide6.QtCore import QTimer
 from src.experience.main_window import MainWindow
 from src.experience.pet_window import petWindow
 from src.core.database_reader import DatabaseReader
+from src.core.vision_manager import VisionManager
 
 from pathlib import Path
 
@@ -18,12 +19,14 @@ class QApplication(QApplication):
 
         # initialize stats reader
         self.database_reader = DatabaseReader()
+        self.vision_manager = VisionManager(self)
 
         self.main_window = MainWindow()
         self.main_window.show()
 
         self.open_pet_window()
         QTimer.singleShot(0, self.position_pet_window)
+        self.aboutToQuit.connect(self.vision_manager.stop)
 
     def run(self):
         self.exec()
