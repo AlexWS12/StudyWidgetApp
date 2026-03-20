@@ -22,11 +22,11 @@ class PhoneCalibration:
             "optimal_conf_threshold": 0.5,  # Default fallback until calibration computes a better threshold.
             "detections_count": 0,  # Number of accepted samples collected during calibration.
             "few_shot_samples": 0,  # Number of appearance exemplars captured during steady phase.
-            "few_shot_similarity_threshold": 0.45,  # Global fallback similarity gate.
+            "few_shot_similarity_threshold": 0.40,  # Global fallback similarity gate.
             "few_shot_similarity_thresholds": {
-                "steady": 0.45,
-                "right_rotation": 0.42,
-                "left_rotation": 0.42,
+                "steady": 0.40,
+                "right_rotation": 0.37,
+                "left_rotation": 0.37,
             },
             "lighting_quality": "unknown",  # Qualitative label derived from average confidence.
             "calibrated": False,  # Flips to True only after enough usable samples are collected.
@@ -254,7 +254,7 @@ class PhoneCalibration:
         # bank yields a higher inter-exemplar median and therefore a tighter gate.
         # A diverse bank (many viewpoints) returns a looser gate to stay inclusive.
         if len(exemplars) < 3:
-            return 0.45
+            return 0.40
         sims = []
         for i in range(len(exemplars)):
             for j in range(i + 1, len(exemplars)):
@@ -262,7 +262,7 @@ class PhoneCalibration:
         if not sims:
             return 0.45
         # Margin below median keeps the gate tolerant to moderate rotation/lighting shifts.
-        return float(np.clip(np.median(sims) - 0.15, 0.35, 0.85))
+        return float(np.clip(np.median(sims) - 0.10, 0.35, 0.85))
 
     def _add_signature_if_novel(self, bank: list, signature: np.ndarray, max_count: int = 14) -> bool:
         """Append signature only if it adds view diversity to the bank."""
