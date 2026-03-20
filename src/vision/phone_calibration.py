@@ -107,10 +107,11 @@ class PhoneCalibration:
         h, w = frame.shape[:2]
 
         panel_w, panel_h = 236, 260
-        x1 = max(10, w - panel_w - 12)
-        y1 = 110
-        x2 = x1 + panel_w
-        y2 = min(h - 10, y1 + panel_h)
+        # Place guide animation out of the center guide box (top-left corner), not right-center.
+        x1 = 12
+        y1 = 12
+        x2 = min(w - 12, x1 + panel_w)
+        y2 = min(h - 12, y1 + panel_h)
 
         overlay = frame.copy()
         cv2.rectangle(overlay, (x1, y1), (x2, y2), (0, 0, 0), -1)
@@ -405,6 +406,9 @@ class PhoneCalibration:
             if not ret:
                 return {"error": "Could not read camera frame"}
 
+            # Keep a clean capture copy for detection so on-screen UI overlays cannot be detected as a phone.
+            raw_frame = frame.copy()
+
             height, width = frame.shape[:2]
             overlay = frame.copy()  # Draw overlays on a copy first so text remains readable.
             cv2.rectangle(overlay, (0, 0), (width, 105), (0, 0, 0), -1)  # Dark banner behind top instructions.
@@ -413,7 +417,7 @@ class PhoneCalibration:
             box = self._draw_guide_box(frame, active=stable_since is not None)
             guide_x1, guide_y1, guide_x2, guide_y2 = box
 
-            best_box, in_box, _ = self._find_phone_in_box(frame, conf=0.2)  # Use low threshold during setup to avoid missing borderline poses.
+            best_box, in_box, _ = self._find_phone_in_box(raw_frame, conf=0.2)  # Use low threshold during setup to avoid missing borderline poses.
 
             cv2.putText(frame, "CALIBRATION READY", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 2)
@@ -597,9 +601,10 @@ class PhoneCalibration:
                 cv2.putText(frame, phase["instruction"], (10, 75),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                 
-                # Run detection if collecting
+                # Run detection on the clean camera frame (not the UI-overlay frame).
+                raw_frame = frame.copy()
                 if phase["collect"]:
-                    best_box, in_box, _ = self._find_phone_in_box(frame, conf=0.2)
+                    best_box, in_box, _ = self._find_phone_in_box(raw_frame, conf=0.2)
                     
                     if best_box is not None:
                         conf = float(best_box.conf[0])

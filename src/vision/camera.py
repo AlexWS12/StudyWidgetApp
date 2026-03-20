@@ -21,6 +21,7 @@ class Camera:
         self.few_shot_signatures = []
         self.few_shot_similarity_threshold = 0.45
         self.few_shot_bundle_path = PhoneCalibration.get_few_shot_bundle_path()
+        self.calibrated = False  # true after successful calibration
         self._load_few_shot_bundle()
 
     def _load_few_shot_bundle(self):
@@ -41,9 +42,11 @@ class Camera:
 
             self.detection_params["few_shot_enabled"] = len(self.few_shot_signatures) >= 3
             self.detection_params["few_shot_similarity_threshold"] = self.few_shot_similarity_threshold
+            self.calibrated = True
         except (OSError, ValueError, KeyError):
             self.few_shot_signatures = []
             self.detection_params["few_shot_enabled"] = False
+            self.calibrated = False
 
     def _get_guide_box(self, frame_shape):
         """Use the same centered phone guide-box dimensions as calibration."""
@@ -106,9 +109,11 @@ class Camera:
         
         if result.get("success"):
             self.detection_params = calibrator.get_optimal_params()
+            self.calibrated = True
             print(f"Using params: {self.detection_params}")
             return True
         else:
+            self.calibrated = False
             print(f"Calibration failed: {result.get('message')}")
             return False
         
@@ -126,17 +131,20 @@ class Camera:
         results = self.model(frame, classes=[67], conf=self.detection_params.get("conf", 0.35), iou=0.3, imgsz=640)
         annotated = frame.copy()
 
-        guide_x1, guide_y1, guide_x2, guide_y2 = self._get_guide_box(frame.shape)
-        cv.rectangle(annotated, (guide_x1, guide_y1), (guide_x2, guide_y2), (0, 255, 255), 2)
-        cv.putText(
-            annotated,
-            "Phone guide box",
-            (guide_x1 - 12, guide_y1 - 10),
-            cv.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 255, 255),
-            2,
-        )
+        if not self.calibrated:
+            guide_x1, guide_y1, guide_x2, guide_y2 = self._get_guide_box(frame.shape)
+            cv.rectangle(annotated, (guide_x1, guide_y1), (guide_x2, guide_y2), (0, 255, 255), 2)
+            cv.putText(
+                annotated,
+                "Phone guide box",
+                (guide_x1 - 12, guide_y1 - 10),
+                cv.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 255),
+                2,
+            )
+        else:
+            guide_x1 = guide_y1 = guide_x2 = guide_y2 = None
 
         best_valid_box = None
         best_valid_conf = -1.0
@@ -145,9 +153,13 @@ class Camera:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
-            in_box = guide_x1 <= center_x <= guide_x2 and guide_y1 <= center_y <= guide_y2
-            if not in_box:
-                continue
+
+            if not self.calibrated:
+                in_box = guide_x1 <= center_x <= guide_x2 and guide_y1 <= center_y <= guide_y2
+                if not in_box:
+                    continue
+            else:
+                in_box = True
 
             similarity = 1.0
             if self.detection_params.get("few_shot_enabled", False):
@@ -176,9 +188,13 @@ class Camera:
                 2,
             )
         else:
+            if self.calibrated:
+                no_phone_text = "No phone detected"
+            else:
+                no_phone_text = "No valid phone in guide box"
             cv.putText(
                 annotated,
-                "No valid phone in guide box",
+                no_phone_text,
                 (10, frame.shape[0] - 18),
                 cv.FONT_HERSHEY_SIMPLEX,
                 0.65,
