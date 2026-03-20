@@ -3,6 +3,7 @@ import cv2 as cv
 from rich.console import Console
 from rich.panel import Panel
 import questionary
+import msvcrt
 
 from camera import Camera
 from phone_calibration import PhoneCalibration
@@ -45,7 +46,7 @@ def calibrate_gaze_center() -> None:
     if result.get("success"):
         console.print(
             "[green]Gaze center saved[/green] "
-            f"(yaw={result['yaw_deg']:.2f}, pitch={result['pitch_deg']:.2f}, roll={result['roll_deg']:.2f})"
+            f"(yaw={result['yaw_center_deg']:.2f}, pitch={result['pitch_center_deg']:.2f}, roll={result['roll_center_deg']:.2f})"
         )
     else:
         console.print(f"[yellow]Gaze calibration did not complete:[/yellow] {result}")
@@ -60,6 +61,9 @@ def main() -> None:
                 title="Vision Menu",
             )
         )
+
+        while msvcrt.kbhit():
+            msvcrt.getch()
 
         choice = questionary.select(
             "Choose an option:",

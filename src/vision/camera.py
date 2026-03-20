@@ -15,12 +15,12 @@ class Camera:
 
     Detection strategy
     ------------------
-    YOLO runs on every frame (fast, ~10–30 ms).  Grounding DINO is used as a
-    supplemental detector: it runs every ``_DINO_RUN_INTERVAL`` frames *and*
-    immediately whenever YOLO produces zero candidates.  Results from both
-    models are merged with IoU-based deduplication so the same phone is never
-    double-counted.  DINO detections are shown in a distinct orange colour to
-    make the source easy to spot during debugging.
+    YOLO runs every ``yolo_frame_skip`` frames (fast, ~10–30 ms); cached boxes are
+    reused in between.  Grounding DINO is used as a supplemental detector: it runs
+    every ``_DINO_RUN_INTERVAL`` frames *and* immediately whenever YOLO produces zero
+    candidates.  Results from both models are merged with IoU-based deduplication so
+    the same phone is never double-counted.  DINO detections are shown in a distinct
+    orange colour to make the source easy to spot during debugging.
     """
 
     _DINO_RUN_INTERVAL = 5  # run DINO at least once every N frames for freshness
@@ -28,19 +28,26 @@ class Camera:
     def __init__(self, model_path="yolo26n.pt"):
         """Initialise camera, YOLO, Grounding DINO, and eye tracker."""
         self.model = YOLO(model_path)
-        self.cap = cv.VideoCapture(0)
+        self.cap = cv.VideoCapture(0)  # Open default webcam (index 0)
         self.eye_tracker = gazeTracker()
-        self.detection_params = {"conf": 0.35}
-        self.few_shot_signatures = []
-        self.few_shot_similarity_threshold = 0.45
+        self.detection_params = {"conf": 0.35}  # Default detection confidence; overwritten after calibration
+        self.few_shot_signatures = []           # Appearance exemplars saved during phone calibration
+        self.few_shot_similarity_threshold = 0.45  # Min cosine similarity to accept a detection as a phone
         self.few_shot_bundle_path = PhoneCalibration.get_few_shot_bundle_path()
-        self.calibrated = False
+        self.calibrated = False  # True after a successful phone calibration run
 
         # Grounding DINO — lazy-loads weights on first use
         self.dino = DinoDetector()
         self._dino_frame_count = 0
         self._dino_last_run_frame = -self._DINO_RUN_INTERVAL  # force early run
         self._dino_last_detections: list = []  # cached (x1,y1,x2,y2,score) tuples
+
+        # Frame-skip controls: YOLO only runs every Nth frame.
+        # ByteTrack maintains bounding-box continuity on skipped frames, so
+        # detections stay smooth without paying inference cost every frame.
+        self.yolo_frame_skip = 3       # Run YOLO on frame 0, 3, 6, … (tune up for speed, down for accuracy)
+        self._yolo_frame_counter = 0   # Counts total frames seen; used to decide when to re-run YOLO
+        self._last_yolo_results = None # Cached result list reused on skipped frames
 
         self._load_few_shot_bundle()
 
@@ -51,11 +58,14 @@ class Camera:
     def _load_few_shot_bundle(self):
         """Load persisted few-shot signatures and thresholds from the last calibration run."""
         if not os.path.exists(self.few_shot_bundle_path):
+            # No calibration file yet — disable few-shot filtering and fall back to YOLO-only detection
             self.detection_params["few_shot_enabled"] = False
             return
 
         try:
             bundle = np.load(self.few_shot_bundle_path, allow_pickle=False)
+
+            # Each row in "signatures" is a 257-d descriptor (256 HS-histogram bins + 1 edge-density feature)
             signatures = (
                 bundle["signatures"]
                 if "signatures" in bundle.files
@@ -64,13 +74,19 @@ class Camera:
             self.few_shot_signatures = [
                 np.asarray(sig, dtype=np.float32) for sig in signatures
             ]
+
+            # Global cosine similarity threshold chosen during calibration
             self.few_shot_similarity_threshold = (
                 float(bundle["threshold_global"])
                 if "threshold_global" in bundle.files
                 else 0.45
             )
+
+            # Mirror the confidence level the calibrator found optimal so runtime matches calibration behavior
             if "conf_threshold" in bundle.files:
                 self.detection_params["conf"] = float(bundle["conf_threshold"])
+
+            # Require at least 3 exemplars before enabling few-shot filtering (fewer = unreliable threshold)
             self.detection_params["few_shot_enabled"] = (
                 len(self.few_shot_signatures) >= 3
             )
@@ -79,6 +95,7 @@ class Camera:
             )
             self.calibrated = True
         except (OSError, ValueError, KeyError):
+            # Corrupt or incompatible bundle — degrade gracefully to plain YOLO
             self.few_shot_signatures = []
             self.detection_params["few_shot_enabled"] = False
             self.calibrated = False
@@ -90,6 +107,7 @@ class Camera:
     def _get_guide_box(self, frame_shape):
         """Use the same centered phone guide-box dimensions as calibration."""
         height, width = frame_shape[:2]
+        # 22.4% wide × 47% tall keeps the guide box phone-sized across common resolutions
         box_width = int(width * 0.224)
         box_height = int(height * 0.47)
         x1 = (width - box_width) // 2
@@ -124,6 +142,7 @@ class Camera:
         h, w = frame.shape[:2]
         bw = max(1, x2 - x1)
         bh = max(1, y2 - y1)
+        # Add padding proportional to the box size so the descriptor captures context around edges
         px = int(bw * pad_ratio)
         py = int(bh * pad_ratio)
         cx1 = max(0, x1 - px)
@@ -140,20 +159,24 @@ class Camera:
             return None
 
         resized = cv.resize(crop, (96, 96), interpolation=cv.INTER_AREA)
+
+        # 16×16 Hue-Saturation histogram (256 bins) captures color appearance
         hsv = cv.cvtColor(resized, cv.COLOR_BGR2HSV)
         hist_hs = (
             cv.calcHist([hsv], [0, 1], None, [16, 16], [0, 180, 0, 256])
             .flatten()
             .astype(np.float32)
         )
-        hist_hs /= float(hist_hs.sum()) + 1e-6
+        hist_hs /= float(hist_hs.sum()) + 1e-6  # L1-normalize so brightness doesn't dominate
 
+        # Single edge-density feature distinguishes phones (hard rectangular edges) from other objects
         gray = cv.cvtColor(resized, cv.COLOR_BGR2GRAY)
         edges = cv.Canny(gray, 80, 160)
         edge_ratio = np.array(
             [float(np.count_nonzero(edges)) / edges.size], dtype=np.float32
         )
 
+        # Concatenate into a 257-d descriptor then L2-normalize for cosine similarity
         sig = np.concatenate([hist_hs, edge_ratio], axis=0)
         norm = float(np.linalg.norm(sig))
         if norm < 1e-8:
@@ -164,6 +187,7 @@ class Camera:
         """Return max cosine similarity against persisted few-shot exemplars."""
         if signature is None or not self.few_shot_signatures:
             return 0.0
+        # Take the highest similarity across all exemplars (nearest-neighbor style)
         sims = [float(np.dot(signature, ex)) for ex in self.few_shot_signatures]
         return max(sims) if sims else 0.0
 
@@ -174,7 +198,7 @@ class Camera:
     def calibrate(self) -> bool:
         """Run interactive calibration before starting detection."""
         calibrator = PhoneCalibration()
-        result = calibrator.run_calibration()
+        result = calibrator.run_calibration()  # Uses new multi-phase flow
 
         if result.get("success"):
             self.detection_params = calibrator.get_optimal_params()
@@ -198,7 +222,7 @@ class Camera:
 
         Detection pipeline
         ------------------
-        1. YOLO inference — every frame.
+        1. YOLO inference — every ``yolo_frame_skip`` frames; cached boxes reused in between.
         2. Grounding DINO — every ``_DINO_RUN_INTERVAL`` frames OR immediately
            when YOLO finds nothing.  Results are cached; non-overlapping DINO
            boxes are merged into the candidate pool.
@@ -210,10 +234,10 @@ class Camera:
         if not ret:
             return None
 
-        h, w = frame.shape[:2]
+        h = frame.shape[0]
         annotated = frame.copy()
 
-        # Guide box (uncalibrated mode only)
+        # Draw the guide box when uncalibrated so the user knows where to place their phone
         if not self.calibrated:
             guide_x1, guide_y1, guide_x2, guide_y2 = self._get_guide_box(frame.shape)
             cv.rectangle(
@@ -231,14 +255,26 @@ class Camera:
         else:
             guide_x1 = guide_y1 = guide_x2 = guide_y2 = None
 
-        # --- YOLO detection ---
+        # --- YOLO detection (frame-skipped) ---
+        # stream=True yields results lazily, reducing peak memory allocation.
+        # On skipped frames the cached result is reused; ByteTrack maintains continuity.
         yolo_conf = self.detection_params.get("conf", 0.35)
-        yolo_results = self.model(
-            frame, classes=[67], conf=yolo_conf, iou=0.3, imgsz=640
-        )
-        # Collect as plain tuples: (x1, y1, x2, y2, conf, source)
+        if self._yolo_frame_counter % self.yolo_frame_skip == 0 or self._last_yolo_results is None:
+            self._last_yolo_results = list(
+                self.model(
+                    frame,
+                    classes=[67],  # COCO class 67 = cell phone
+                    conf=yolo_conf,
+                    iou=0.3,
+                    imgsz=640,
+                    stream=True,  # Lazy generator — reduces peak memory vs returning a list directly
+                )
+            )
+        self._yolo_frame_counter += 1
+
+        # Collect YOLO hits as plain tuples: (x1, y1, x2, y2, conf, source)
         candidates: list = []
-        for box in yolo_results[0].boxes:
+        for box in self._last_yolo_results[0].boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             candidates.append((x1, y1, x2, y2, float(box.conf[0]), "yolo"))
 
@@ -276,6 +312,7 @@ class Camera:
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
 
+            # Before calibration, ignore detections whose center falls outside the guide box
             if not self.calibrated:
                 if not (
                     guide_x1 <= center_x <= guide_x2
@@ -283,14 +320,16 @@ class Camera:
                 ):
                     continue
 
+            # Few-shot appearance filter: reject detections that don't look like the calibrated phone
             similarity = 1.0
             if self.detection_params.get("few_shot_enabled", False):
                 crop = self._extract_crop_from_coords(frame, x1, y1, x2, y2)
                 sig = self._compute_few_shot_signature(crop)
                 similarity = self._few_shot_similarity(sig)
                 if similarity < self.few_shot_similarity_threshold:
-                    continue
+                    continue  # Looks too different from calibration exemplars — skip
 
+            # Keep only the highest-confidence box that passed all filters
             if conf > best_conf:
                 best_conf = conf
                 best_coords = (x1, y1, x2, y2)
@@ -328,11 +367,12 @@ class Camera:
                 2,
             )
 
-        # Eye tracking
+        # --- Eye / gaze tracking ---
+        # gazeTracker internally throttles to ~5 Hz; on skipped frames it returns the cached overlay
         annotated = self.eye_tracker.track_eyes(annotated)
-        eye_data = self.eye_tracker.extract_eye_data(
-            self.eye_tracker.landmarks, annotated
-        )
+
+        # Extract structured eye data (iris positions, gaze state, head-pose angles) from latest landmarks
+        self.eye_tracker.extract_eye_data(self.eye_tracker.landmarks, annotated)
 
         return frame, annotated
 
@@ -346,6 +386,7 @@ class Camera:
 if __name__ == "__main__":
     cam = Camera()
 
+    # Run calibration first
     print("Starting calibration...")
     if cam.calibrate():
         print("Calibration successful! Starting detection...")
