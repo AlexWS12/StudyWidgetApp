@@ -1,6 +1,8 @@
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from src.vision.camera import Camera
+from src.vision.phone_calibration import PhoneCalibration
+from src.vision.Trackers.gaze_calibration import GazeCalibrator
 
 
 class VisionManager(QObject):
@@ -42,3 +44,25 @@ class VisionManager(QObject):
             return
         _, annotated = data
         self.frame_ready.emit(annotated)
+
+    def run_phone_calibration(self, target_detections: int = 15) -> dict:
+        """Run phone calibration while temporarily owning the camera exclusively."""
+        was_running = self.is_running
+        if was_running:
+            self.stop()
+        try:
+            return PhoneCalibration().run_calibration(target_detections=target_detections)
+        finally:
+            if was_running:
+                self.start()
+
+    def run_gaze_calibration(self) -> dict:
+        """Run gaze calibration while temporarily owning the camera exclusively."""
+        was_running = self.is_running
+        if was_running:
+            self.stop()
+        try:
+            return GazeCalibrator().run()
+        finally:
+            if was_running:
+                self.start()
