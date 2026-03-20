@@ -5,8 +5,21 @@ from ultralytics import YOLO
 import cv2 as cv
 import numpy as np
 import os
+import sys
+import time
 from Trackers.attention_tracker import gazeTracker
 from phone_calibration import PhoneCalibration
+
+# Import DistractionType from the sibling intelligence package.
+# Resolves via __file__ so it works whether camera is run directly (src/vision on path)
+# or imported from the project root (src on path).
+_intel_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "intelligence"))
+if _intel_dir not in sys.path:
+    sys.path.insert(0, _intel_dir)
+try:
+    from session_manager import DistractionType as _DistractionType
+except ImportError:
+    _DistractionType = None  # Graceful degradation if intelligence package is unavailable
 
 
 class Camera:
@@ -17,8 +30,13 @@ class Camera:
     reused in between via ByteTrack continuity.
     """
 
-    def __init__(self, model_path="yolo26n.pt"):
-        """Initialise camera, YOLO model, and eye tracker."""
+    def __init__(self, model_path="yolo26n.pt", session_manager=None):
+        """Initialise camera, YOLO model, and eye tracker.
+
+        Args:
+            session_manager: Optional SessionManager instance. When provided,
+                resolved phone and look-away events are logged via log_distraction().
+        """
         self.model = YOLO(model_path)
         self.cap = cv.VideoCapture(0)  # Open default webcam (index 0)
         self.eye_tracker = gazeTracker()
@@ -34,6 +52,19 @@ class Camera:
         self.yolo_frame_skip = 3       # Run YOLO on frame 0, 3, 6, … (tune up for speed, down for accuracy)
         self._yolo_frame_counter = 0   # Counts total frames seen; used to decide when to re-run YOLO
         self._last_yolo_results = None # Cached result list reused on skipped frames
+
+        # Distraction tracking: each event is defined by a start time and a
+        # "last seen" time.  When the trigger disappears, a cooldown window
+        # keeps the event open so brief flickers don't split one distraction
+        # into many.  Duration is measured start → last_seen (not start → now).
+        self._session_manager = session_manager
+        self._DISTRACTION_COOLDOWN = 5.0  # seconds of absence before an event is finalized and logged
+        self._phone_distraction_start: float | None = None  # wall-clock time the current phone event opened
+        self._phone_last_seen: float | None = None          # last frame where a phone was accepted; cooldown ticks from here
+        self._look_away_distraction_start: float | None = None  # wall-clock time the current look-away event opened
+        self._look_away_last_seen: float | None = None          # last frame where user was looking away
+        self._left_desk_distraction_start: float | None = None  # wall-clock time when face first disappeared (user left desk)
+        self._left_desk_last_seen: float | None = None          # last frame with no face detected; cooldown ticks from here
 
         self._load_few_shot_bundle()
 
@@ -232,7 +263,7 @@ class Camera:
                     classes=[67],  # COCO class 67 = cell phone
                     conf=yolo_conf,
                     iou=0.3,
-                    imgsz=640,
+                    imgsz=416,  # Small input size for speed; phones are usually large enough to still be detectable
                     stream=True,  # Lazy generator — reduces peak memory vs returning a list directly
                 )
             )
@@ -305,15 +336,154 @@ class Camera:
         # gazeTracker internally throttles to ~5 Hz; on skipped frames it returns the cached overlay
         annotated = self.eye_tracker.track_eyes(annotated)
 
-        # Extract structured eye data (iris positions, gaze state, head-pose angles) from latest landmarks
-        self.eye_tracker.extract_eye_data(self.eye_tracker.landmarks, annotated)
+        # --- Distraction event logging ---
+        self._update_distraction_tracking(best_coords is not None)
 
         return frame, annotated
 
+    def _update_distraction_tracking(self, phone_detected: bool) -> None:
+        """Track distraction events with cooldown merging and priority suppression.
+
+        Cooldown: when a trigger disappears, the event stays open for
+        ``_DISTRACTION_COOLDOWN`` seconds.  If the trigger reappears inside
+        that window, the event continues seamlessly.  Duration is measured
+        from start to last-seen (not start to cooldown-expiry).
+
+        Priority: phone distraction outranks look-away.  While a phone event
+        is active (including its cooldown window), look-away tracking is
+        suppressed so the same time is not double-counted.
+        """
+        if self._session_manager is None or _DistractionType is None:
+            return
+
+        now = time.time()
+        attention_data = self.eye_tracker._cached_data
+        face_present = attention_data.get("face_present", True)
+        # Separate left-desk (no face in frame) from look-away (face present but not facing screen).
+        # Previously both resolved to looking_away=True because face_facing_screen is False in both
+        # cases, causing absent-user time to be logged under the wrong distraction type.
+        looking_away = face_present and not attention_data.get("face_facing_screen", True)
+        left_desk = not face_present  # True when MediaPipe detects no face at all
+
+        # --- Phone distraction (highest priority) ---
+        if phone_detected:
+            if self._phone_distraction_start is None:
+                self._phone_distraction_start = now  # open a new event on first detection
+            self._phone_last_seen = now  # keep refreshing so the cooldown resets each frame
+        elif self._phone_distraction_start is not None:
+            # Phone is gone but the event is still open — wait out the cooldown before logging.
+            # This merges flickers (phone briefly leaves then returns) into a single event.
+            if now - self._phone_last_seen >= self._DISTRACTION_COOLDOWN:
+                # Cooldown expired: duration is start → last_seen, NOT start → now,
+                # so the 5s wait doesn't inflate the reported distraction length.
+                duration = max(1, int(self._phone_last_seen - self._phone_distraction_start))
+                try:
+                    self._session_manager.log_distraction(_DistractionType.PHONE_DISTRACTION, duration)
+                except Exception:
+                    pass  # Session may not be IN_PROGRESS; never crash the camera loop
+                self._phone_distraction_start = None
+                self._phone_last_seen = None
+
+        # --- Look-away distraction (suppressed while phone event is active) ---
+        # A phone event includes its cooldown window: even if the phone just left the
+        # frame, we don't start counting a new look-away until the phone event fully closes.
+        phone_active = self._phone_distraction_start is not None
+        if phone_active:
+            # Phone takes priority — drop any in-progress look-away or left-desk so the same
+            # distraction window isn't counted twice under two different types.
+            if self._look_away_distraction_start is not None:
+                self._look_away_distraction_start = None
+                self._look_away_last_seen = None
+            return
+
+        # --- Left-desk distraction (face absent; user physically left desk) ---
+        if left_desk:
+            # If a look-away was open, discard it — user left the desk so the look-away
+            # is superseded by the more significant absence event.
+            if self._look_away_distraction_start is not None:
+                self._look_away_distraction_start = None
+                self._look_away_last_seen = None
+            if self._left_desk_distraction_start is None:
+                self._left_desk_distraction_start = now  # open event the first frame face is gone
+            self._left_desk_last_seen = now  # refresh while face remains absent
+        else:
+            # Face is present — check whether a left-desk event has finished its cooldown.
+            if self._left_desk_distraction_start is not None:
+                if now - self._left_desk_last_seen >= self._DISTRACTION_COOLDOWN:
+                    duration = max(1, int(self._left_desk_last_seen - self._left_desk_distraction_start))
+                    try:
+                        self._session_manager.log_distraction(_DistractionType.LEFT_DESK_DISTRACTION, duration)
+                    except Exception:
+                        pass
+                    self._left_desk_distraction_start = None
+                    self._left_desk_last_seen = None
+
+            # --- Look-away (only meaningful when face is present) ---
+            if looking_away:
+                if self._look_away_distraction_start is None:
+                    self._look_away_distraction_start = now  # open a new look-away event
+                self._look_away_last_seen = now  # refresh so brief returns to screen don't close the event
+            elif self._look_away_distraction_start is not None:
+                # User is back on screen — wait out the cooldown before finalizing,
+                # same rationale as phone: prevents brief glances from splitting events.
+                if now - self._look_away_last_seen >= self._DISTRACTION_COOLDOWN:
+                    duration = max(1, int(self._look_away_last_seen - self._look_away_distraction_start))
+                    try:
+                        self._session_manager.log_distraction(_DistractionType.LOOK_AWAY_DISTRACTION, duration)
+                    except Exception:
+                        pass
+                    self._look_away_distraction_start = None
+                    self._look_away_last_seen = None
+
     def release(self):
-        """Release camera resources and close windows."""
+        """Release camera resources and close windows.
+
+        Flushes any open distraction events so they are not silently lost.
+        """
+        self._flush_open_distractions()
         self.cap.release()
         cv.destroyAllWindows()
+
+    def _flush_open_distractions(self) -> None:
+        """Log any in-progress distraction events before the camera shuts down.
+
+        Uses last_seen (not now) so duration reflects actual distraction time,
+        not time spent waiting for the cooldown to expire.
+        """
+        if self._session_manager is None or _DistractionType is None:
+            return
+
+        if self._phone_distraction_start is not None:
+            # Use last_seen as the end boundary — the camera is shutting down, not
+            # the phone disappearing, so we don't want to pad with cooldown time.
+            end = self._phone_last_seen or time.time()
+            duration = max(1, int(end - self._phone_distraction_start))
+            try:
+                self._session_manager.log_distraction(_DistractionType.PHONE_DISTRACTION, duration)
+            except Exception:
+                pass
+            self._phone_distraction_start = None
+            self._phone_last_seen = None
+
+        if self._look_away_distraction_start is not None:
+            end = self._look_away_last_seen or time.time()  # same rationale as phone flush above
+            duration = max(1, int(end - self._look_away_distraction_start))
+            try:
+                self._session_manager.log_distraction(_DistractionType.LOOK_AWAY_DISTRACTION, duration)
+            except Exception:
+                pass
+            self._look_away_distraction_start = None
+            self._look_away_last_seen = None
+
+        if self._left_desk_distraction_start is not None:
+            end = self._left_desk_last_seen or time.time()
+            duration = max(1, int(end - self._left_desk_distraction_start))
+            try:
+                self._session_manager.log_distraction(_DistractionType.LEFT_DESK_DISTRACTION, duration)
+            except Exception:
+                pass
+            self._left_desk_distraction_start = None
+            self._left_desk_last_seen = None
 
 
 # Runs only when camera.py is executed directly
