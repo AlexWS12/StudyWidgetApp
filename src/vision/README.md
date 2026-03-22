@@ -87,6 +87,11 @@ MediaPipe Face Landmarker–based head-pose tracker. Runs at a capped rate (~5 H
 
 UI note: the tracker overlay is intentionally neutral (`Face Present: YES/NO`). Final attention messaging is owned by `camera.py` so left-desk transitions are represented consistently.
 
+Week 6 integration hardening:
+- small runtime tolerance is applied around calibrated/default bounds so tracking is less brittle across different webcams and seating positions,
+- a short no-face grace window smooths transient detector dropouts instead of immediately flipping to `no_face`,
+- tracker failures degrade gracefully to cached/default data instead of crashing the camera loop.
+
 ### `Trackers/gaze_calibration.py`
 Corner-based gaze calibration. Asks the user to look at each screen corner, recording the resulting head-pose bounds. This lets the attention tracker handle off-center camera placement and multi-monitor setups correctly.
 
@@ -153,6 +158,9 @@ These focused helper tests validate the lightweight vision/intelligence seams,
 while broader full-suite pytest runs remain the source of truth for complete
 integration behavior.
 
+Vision helper tests intentionally cover isolated tracking/calibration logic,
+while combined vision + intelligence pytest runs are the recommended integration gate before handing off to other teams.
+
 ---
 
 ## Sprint History
@@ -161,6 +169,6 @@ integration behavior.
 |------|-------|-------------|
 | 3 | Foundation | YOLO phone detection + Haar-cascade eye tracking merged into unified `camera.py` |
 | 4 | Migration & Calibration | MediaPipe head-pose replaces Haar; interactive phone calibration with few-shot appearance learning shipped |
-| 5 | Correctness Sprint | Grounding DINO added as fallback detector; ByteTrack added for frame-to-frame continuity; distraction event logging with cooldown + priority wired into `SessionManager`; corner-based gaze calibration scoped for off-center cameras and multi-screen setups |
+| 5 | Correctness Sprint | Few-shot phone-validation flow and persisted calibration bundle integrated into camera runtime; distraction event logging with cooldown + priority wired into `SessionManager`; corner-based gaze calibration supports off-center cameras and multi-screen setups; launch/calibration paths cleaned up for integration |
 
 Full sprint notes are in `tasks/Week X/WEEK_X_SUMMARY.md`.

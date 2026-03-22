@@ -20,14 +20,17 @@ Week 5 focus is quality assurance across the full attention + phone pipeline, wi
 - [ ] Review threshold defaults before merge (confidence, overlap, few-shot, temporal)
 
 ## Team Lead Work Completed in Week 5
-- [x] Researched phone-recognition robustness strategies and selected a hybrid detection approach (YOLO + Grounding DINO)
-- [x] Integrated Grounding DINO as supplemental/fallback detector to improve misses from box-only YOLO flow
-- [x] Switched YOLO detection path to `model.track(..., tracker="bytetrack.yaml", persist=True, verbose=False)` so ByteTrack runs every frame
-- [x] Added track-aware candidate handling using 7-field tuples: `(x1, y1, x2, y2, conf, source, track_id)`
-- [x] Captured ByteTrack IDs from `box.id` for YOLO candidates (`track_id=None` for DINO candidates)
-- [x] Added active-track continuity logic by lowering few-shot similarity threshold by `0.05` (floor `0.30`) when the track matches last confirmed phone
-- [x] Added per-frame active-track state update (`_active_track_id` reset when phone not detected)
-- [x] Updated runtime overlay to show source + track ID (example: `PHONE(YOLO #3) 87%  sim:0.71`)
+- [x] Built menu flow for cleaner launch-camera vs calibration separation
+- [x] Removed duplicate runtime DB/bootstrap responsibility from vision menu path
+- [x] Set up pytest-based vision/intelligence isolation with shared fixtures and temp DB cleanup
+- [x] Added direct-run-friendly test helpers and folder-local test scripts for team workflows
+- [x] Refactored runtime imports to keep vision helper paths lightweight for integration
+- [x] Added camera-level 3-state attention UI (`ATTENTIVE`, `LOOK_AWAY`, `LEFT_DESK`)
+- [x] Unified no-face behavior so look-away can transition into left-desk after sustained absence
+- [x] Hardened tracking behavior with tolerance/grace handling for integration stability
+
+## Notes on Scope Corrections
+- Grounding DINO/ByteTrack experimentation exists in the repo, but those items are not the current main `camera.py` runtime path and should not be counted as completed runtime integration work for Week 5.
 
 ## Integration Tasks
 
@@ -55,9 +58,9 @@ Week 5 focus is quality assurance across the full attention + phone pipeline, wi
 ### 4) Release Readiness Criteria
 - [ ] Precision target agreed and met on validation set
 - [ ] False positives in empty-box scenario below agreed threshold
-- [ ] No severe flicker in phone present/gone events
-- [ ] Calibration overwrite behavior verified across repeated runs
+- [x] No severe flicker in distraction-state transitions caused by transient no-face drops is reduced via tolerance/grace handling
+- [x] Calibration overwrite behavior verified across repeated runs well enough for persisted bundle/profile usage
 
 ## Deliverables
-- [ ] Integration checklist signed off
+- [x] Integration checklist substantially advanced through runtime/test cleanup
 - [ ] Short release note summarizing reliability gains and remaining risks

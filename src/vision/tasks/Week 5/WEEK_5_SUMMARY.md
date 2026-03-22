@@ -1,7 +1,9 @@
-# Week 5 Summary - Detection Correctness Sprint
+# Week 5 Summary - Detection Correctness and Integration Cleanup
 
 ## Objective
 Improve phone labeling correctness beyond box-only gating by combining spatial, appearance, and temporal validation.
+
+This workstream did not land strictly in the original planned order. The summary below reflects what is actually implemented in the current codebase.
 
 ## Completed in Week 4 (Carryover)
 - [x] Interactive phone calibration flow shipped (guide box + rotation phases)
@@ -18,19 +20,23 @@ Improve phone labeling correctness beyond box-only gating by combining spatial, 
 - Sanity gate: geometric plausibility checks
 - Evaluation: precision/recall + rejection-reason analytics
 
+## What Actually Landed
+- Persisted few-shot bundle loading and runtime similarity gating in `camera.py`
+- Guide-box filtering for uncalibrated phone placement
+- High-confidence fallback path for visual continuity when few-shot validation rejects all candidates
+- Menu-driven separation of camera launch vs calibration flows
+- Camera no longer auto-runs calibration on direct startup
+- Look-away / left-desk distraction-state integration with a 3-state camera-owned overlay
+- Vision/intelligence pytest isolation with temp DB cleanup and direct-run-friendly team scripts
+- Tracking robustness hardening via tolerance and short no-face grace handling
+
 ## Team Focus
 - Team A: gaze-state smoothing and calibration consistency
 - Team B: phone-label correctness implementation + metrics
 - Team Lead: integration contract, telemetry, release gating
 
-## Team Lead Implementation Update (Completed)
-- Researched practical methods to improve phone-recognition correctness and selected YOLO + Grounding DINO hybrid detection.
-- Enabled ByteTrack on the YOLO path using `self.model.track(..., tracker="bytetrack.yaml", persist=True, verbose=False)` to maintain Kalman-filtered track continuity between frames.
-- Extracted per-detection track IDs from `box.id` and extended detection candidates to include track identity: `(x1, y1, x2, y2, conf, source, track_id)`.
-- Kept DINO candidates trackless (`track_id=None`) since ByteTrack applies only to YOLO outputs.
-- Added track-aware appearance gating: when current detection matches last confirmed track, lowered similarity threshold by `0.05` (with a floor at `0.30`) to reduce dropouts during rotation/occlusion.
-- Added `_active_track_id` lifecycle update each frame, resetting to `None` when no phone is accepted.
-- Updated annotation format to include tracking context (example: `PHONE(YOLO #3) 87%  sim:0.71`).
+## Scope Correction
+- Grounding DINO and ByteTrack experimentation exists in the repository, but that path is not the current main camera runtime and should not be treated as the completed Week 5 runtime outcome.
 
 ## Exit Criteria
 - False positives reduced in guide-box scenarios

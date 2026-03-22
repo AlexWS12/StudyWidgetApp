@@ -1,6 +1,7 @@
 # attention_tracker.py
 # Face-facing-screen tracking using MediaPipe Face Landmarker.
 
+import copy
 import cv2 as cv
 import mediapipe as mp
 import os
@@ -40,6 +41,11 @@ class gazeTracker:
         self.yaw_threshold_deg = 18.0
         self.pitch_threshold_deg = 15.0
         self.roll_threshold_deg = 22.0
+        # Runtime tolerance makes integration more robust when pose estimates jitter
+        # slightly around the boundary on different machines/camera positions.
+        self.attention_tolerance_deg = 3.0
+        self.roll_tolerance_deg = 4.0
+        self.missing_face_grace_seconds = 0.60
 
         self.center_offsets = self._load_center_offsets()
         self.calibrated_bounds = self._load_attention_bounds()
@@ -53,7 +59,13 @@ class gazeTracker:
 
         self._frame_counter = 0
         self._last_detection_ts = 0.0
-        self._cached_data = {
+        self._last_face_seen_ts = 0.0
+        self._last_face_present_data = None
+        self._cached_data = self._build_default_data()
+
+    def _build_default_data(self) -> dict:
+        """Return the default tracking payload shared by cache and no-face cases."""
+        return {
             "face_present": False,
             "eyes_detected": False,
             "left_iris": None,
@@ -63,9 +75,59 @@ class gazeTracker:
             "yaw_deg": 0.0,
             "pitch_deg": 0.0,
             "roll_deg": 0.0,
+            "raw_yaw_deg": 0.0,
+            "raw_pitch_deg": 0.0,
+            "raw_roll_deg": 0.0,
             "face_facing_screen": False,
             "attention_state": "no_face",
+            "tracking_degraded": False,
         }
+
+    def _is_face_facing_screen(self, yaw: float, pitch: float, roll: float) -> bool:
+        """Classify attention using calibrated bounds plus a small runtime tolerance.
+
+        The tolerance reduces false negatives during integration when different
+        webcams or frame rates make pose estimation slightly noisier.
+        """
+        if self.calibrated_bounds is not None:
+            return (
+                (self.calibrated_bounds["yaw_min"] - self.attention_tolerance_deg)
+                <= yaw
+                <= (self.calibrated_bounds["yaw_max"] + self.attention_tolerance_deg)
+                and (self.calibrated_bounds["pitch_min"] - self.attention_tolerance_deg)
+                <= pitch
+                <= (self.calibrated_bounds["pitch_max"] + self.attention_tolerance_deg)
+                and abs(roll)
+                <= (self.calibrated_bounds["roll_threshold_deg"] + self.roll_tolerance_deg)
+            )
+
+        return (
+            abs(yaw) <= (self.yaw_threshold_deg + self.attention_tolerance_deg)
+            and abs(pitch) <= (self.pitch_threshold_deg + self.attention_tolerance_deg)
+            and abs(roll) <= (self.roll_threshold_deg + self.roll_tolerance_deg)
+        )
+
+    def _stabilize_tracking_data(self, data: dict, now: float) -> dict:
+        """Keep recent face state briefly to absorb transient detector dropouts.
+
+        This avoids noisy integration behavior where a single missed detection
+        immediately flips attention to no-face/away.
+        """
+        if data["face_present"]:
+            self._last_face_seen_ts = now
+            self._last_face_present_data = copy.deepcopy(data)
+            return data
+
+        if (
+            self._last_face_present_data is not None
+            and (now - self._last_face_seen_ts) <= self.missing_face_grace_seconds
+        ):
+            stabilized = copy.deepcopy(self._last_face_present_data)
+            stabilized["tracking_degraded"] = True
+            return stabilized
+
+        self._last_face_present_data = None
+        return data
 
     def _load_center_offsets(self) -> dict:
         """Load persisted center offsets so attention is relative to the screen center, not camera position."""
@@ -189,12 +251,21 @@ class gazeTracker:
         due_by_time = (now - self._last_detection_ts) >= self.detection_interval_seconds
 
         if due_by_frame and due_by_time:
-            rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            try:
+                rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-            result = self.detector.detect(mp_image)
-            self.landmarks = result.face_landmarks[0] if result.face_landmarks else None
-            self._cached_data = self.extract_eye_data(self.landmarks, frame)
+                result = self.detector.detect(mp_image)
+                self.landmarks = result.face_landmarks[0] if result.face_landmarks else None
+                fresh_data = self.extract_eye_data(self.landmarks, frame)
+                self._cached_data = self._stabilize_tracking_data(fresh_data, now)
+            except Exception:
+                # Keep the tracker lightweight and fault-tolerant during integration.
+                # A transient MediaPipe/OpenCV failure should degrade gracefully.
+                self.landmarks = None
+                self._cached_data = self._stabilize_tracking_data(
+                    self._build_default_data(), now
+                )
             self._last_detection_ts = now
 
             if self.draw_pose_axes and self.landmarks is not None:
@@ -229,22 +300,9 @@ class gazeTracker:
 
     def extract_eye_data(self, landmarks, frame):
         """Return attention-focused data while keeping previous keys for compatibility."""
-        data = {
-            "face_present": landmarks is not None,
-            "eyes_detected": landmarks is not None,  # Kept for backwards compatibility.
-            "left_iris": None,
-            "right_iris": None,
-            "gaze_state_horizontal": "unknown",
-            "gaze_state_vertical": "unknown",
-            "yaw_deg": 0.0,
-            "pitch_deg": 0.0,
-            "roll_deg": 0.0,
-            "raw_yaw_deg": 0.0,
-            "raw_pitch_deg": 0.0,
-            "raw_roll_deg": 0.0,
-            "face_facing_screen": False,
-            "attention_state": "no_face",
-        }
+        data = self._build_default_data()
+        data["face_present"] = landmarks is not None
+        data["eyes_detected"] = landmarks is not None  # Kept for backwards compatibility.
 
         if landmarks is None:
             return data
@@ -281,21 +339,7 @@ class gazeTracker:
         else:
             data["gaze_state_vertical"] = "center"
 
-        if self.calibrated_bounds is not None:
-            # Use asymmetric user-specific bounds recorded during corner calibration.
-            # These allow for postures where the user naturally sits off-center.
-            facing = (
-                self.calibrated_bounds["yaw_min"] <= yaw <= self.calibrated_bounds["yaw_max"]
-                and self.calibrated_bounds["pitch_min"] <= pitch <= self.calibrated_bounds["pitch_max"]
-                and abs(roll) <= self.calibrated_bounds["roll_threshold_deg"]
-            )
-        else:
-            # Symmetric fallback thresholds used when no calibration profile exists.
-            facing = (
-                abs(yaw) <= self.yaw_threshold_deg
-                and abs(pitch) <= self.pitch_threshold_deg
-                and abs(roll) <= self.roll_threshold_deg
-            )
+        facing = self._is_face_facing_screen(yaw, pitch, roll)
         data["face_facing_screen"] = facing
         data["attention_state"] = "attentive" if facing else "away"
         return data
