@@ -3,23 +3,30 @@
 
 from ultralytics import YOLO
 import cv2 as cv
+import importlib
 import numpy as np
 import os
-import sys
 import time
 from Trackers.attention_tracker import gazeTracker
 from detectors.phone_calibration import PhoneCalibration
 
-# Import DistractionType from the sibling intelligence package.
-# Resolves via __file__ so it works whether camera is run directly (src/vision on path)
-# or imported from the project root (src on path).
-_intel_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "intelligence"))
-if _intel_dir not in sys.path:
-    sys.path.insert(0, _intel_dir)
-try:
-    from session_manager import DistractionType as _DistractionType
-except ImportError:
-    _DistractionType = None  # Graceful degradation if intelligence package is unavailable
+
+def _import_distraction_type():
+    """Lazily resolve DistractionType from the sibling intelligence package.
+
+    Tries the project-root path first (src.intelligence.session_manager),
+    then the flat module name used when running directly from src/vision.
+    Returns None if the intelligence package is unavailable.
+    """
+    for module_path in ("src.intelligence.session_manager", "session_manager"):
+        try:
+            return getattr(importlib.import_module(module_path), "DistractionType")
+        except (ModuleNotFoundError, AttributeError):
+            continue
+    return None
+
+
+_DistractionType = _import_distraction_type()
 
 
 class Camera:

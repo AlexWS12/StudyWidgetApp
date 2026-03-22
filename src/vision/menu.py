@@ -1,40 +1,35 @@
 
 import cv2 as cv
+import importlib
 import os
-import sys
 from rich.console import Console
 from rich.panel import Panel
 import questionary
 import msvcrt
 
-from camera import Camera
-from detectors.phone_calibration import PhoneCalibration
-from Trackers.gaze_calibration import GazeCalibrator
 
-# Resolve the sibling intelligence package regardless of whether this file is
-# launched directly from src/vision or imported from the project root.
-_intel_dir = os.path.normpath(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "intelligence")
-)
-if _intel_dir not in sys.path:
-    sys.path.insert(0, _intel_dir)
-
-from database import get_database
-from session_manager import SessionManager
+def _import_symbol(primary_module: str, fallback_module: str, symbol: str):
+    """Import symbol from project-root path first, then direct-run fallback path."""
+    try:
+        return getattr(importlib.import_module(primary_module), symbol)
+    except ModuleNotFoundError:
+        return getattr(importlib.import_module(fallback_module), symbol)
 
 
 console = Console()
 
 
-def initialize_database() -> None:
-    """Create the shared SQLite database object before showing the menu."""
-    # get_database() constructs the singleton on first call, creating tables if needed.
-    get_database()
-
-
 def launch_camera() -> None:
     """Run the camera loop with phone and attention overlays."""
-    # Create and start a session so camera distraction events are written to data.db.
+    # Camera and SessionManager are imported lazily so calibration paths do not
+    # instantiate or even import camera-specific runtime dependencies.
+    Camera = _import_symbol("src.vision.camera", "camera", "Camera")
+    SessionManager = _import_symbol(
+        "src.intelligence.session_manager", "session_manager", "SessionManager"
+    )
+
+    # SessionManager attaches to the shared intelligence DB lazily; the app layer
+    # is responsible for bootstrapping persistent state when running the full UI.
     session_manager = SessionManager()
     session_manager.start_session()
 
@@ -62,6 +57,11 @@ def launch_camera() -> None:
 
 def calibrate_phone_detection() -> None:
     """Run the existing YOLO phone calibration flow."""
+    PhoneCalibration = _import_symbol(
+        "src.vision.detectors.phone_calibration",
+        "detectors.phone_calibration",
+        "PhoneCalibration",
+    )
     result = PhoneCalibration().run_calibration()
     if result.get("success"):
         console.print(f"[green]Phone calibration complete:[/green] {result}")
@@ -71,6 +71,11 @@ def calibrate_phone_detection() -> None:
 
 def calibrate_gaze_center() -> None:
     """Calibrate neutral gaze center offsets used by attention tracker."""
+    GazeCalibrator = _import_symbol(
+        "src.vision.Trackers.gaze_calibration",
+        "Trackers.gaze_calibration",
+        "GazeCalibrator",
+    )
     result = GazeCalibrator().run()
     if result.get("success"):
         console.print(
@@ -83,8 +88,6 @@ def calibrate_gaze_center() -> None:
 
 def main() -> None:
     """Minimal modular vision menu."""
-    initialize_database()
-
     while True:
         console.print(
             Panel.fit(

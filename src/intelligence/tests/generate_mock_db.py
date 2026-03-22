@@ -4,72 +4,27 @@ Run this script once to (re)create the mock database:
     python generate_mock_db.py
 """
 
-import sqlite3
 import os
+import sys
+
+try:
+    from database import Database
+except ModuleNotFoundError:
+    sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(__file__), "..")))
+    from database import Database
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "mock_data.db")
 
 
-def create_tables(conn):
-    conn.executescript('''
-        CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            start_time TEXT NOT NULL,
-            end_time TEXT,
-            duration INTEGER DEFAULT 0,
-            focused_time INTEGER DEFAULT 0,
-            events INTEGER DEFAULT 0,
-            time_away INTEGER DEFAULT 0,
-            look_away_time INTEGER DEFAULT 0,
-            distraction_time INTEGER DEFAULT 0,
-            phone_distractions INTEGER DEFAULT 0,
-            look_away_distractions INTEGER DEFAULT 0,
-            left_desk_distractions INTEGER DEFAULT 0,
-            app_distractions INTEGER DEFAULT 0,
-            idle_distractions INTEGER DEFAULT 0,
-            focus_percentage REAL DEFAULT 0,
-            score INTEGER DEFAULT 0,
-            points_earned INTEGER DEFAULT 0,
-            coins_earned INTEGER DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS user_stats (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            level INTEGER DEFAULT 1,
-            avg_focus_time REAL DEFAULT 0.0,
-            total_sessions INTEGER DEFAULT 0,
-            total_time_spent INTEGER DEFAULT 0,
-            coins INTEGER DEFAULT 0,
-            exp INTEGER DEFAULT 0,
-            total_distractions INTEGER DEFAULT 0,
-            total_look_aways INTEGER DEFAULT 0,
-            current_pet TEXT DEFAULT 'default',
-            created_at TEXT,
-            updated_at TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id INTEGER NOT NULL,
-            event_type TEXT NOT NULL,
-            timestamp TEXT NOT NULL,
-            duration INTEGER DEFAULT 0,
-            details TEXT,
-            FOREIGN KEY (session_id) REFERENCES sessions (id)
-        );
-
-        CREATE TABLE IF NOT EXISTS achievements (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT NOT NULL,
-            criteria TEXT NOT NULL,
-            emoji TEXT DEFAULT '🏆',
-            unlocked INTEGER DEFAULT 0,
-            unlocked_at TEXT,
-            progress INTEGER DEFAULT 0,
-            target INTEGER DEFAULT 1
-        );
-    ''')
+def reset_tables(conn):
+    """Clear seeded tables so a fresh mock dataset can be rebuilt deterministically."""
+    conn.execute("DELETE FROM events")
+    conn.execute("DELETE FROM achievements")
+    conn.execute("DELETE FROM sessions")
+    conn.execute("DELETE FROM user_stats")
+    conn.execute(
+        "DELETE FROM sqlite_sequence WHERE name IN ('sessions', 'events', 'achievements')"
+    )
 
 
 def seed_sessions(conn):
@@ -92,7 +47,7 @@ def seed_sessions(conn):
 
 def seed_user_stats(conn):
     conn.execute('''
-        INSERT OR IGNORE INTO user_stats VALUES (
+        INSERT OR REPLACE INTO user_stats VALUES (
             1, 7, 3774.0, 7, 32400, 177, 770, 36, 12, 'fox',
             '2026-03-04T09:00:00', '2026-03-10T16:00:00'
         )
@@ -145,22 +100,30 @@ def seed_achievements(conn):
     ''', achievements)
 
 
+def create_mock_database(db_path: str = DB_PATH) -> str:
+    """Create a fresh mock database using the production schema and seeded UI data."""
+    if os.path.exists(db_path):
+        os.remove(db_path)
+
+    db = Database(db_path=db_path)
+    conn = db._get_connection()
+
+    try:
+        reset_tables(conn)
+        seed_sessions(conn)
+        seed_user_stats(conn)
+        seed_events(conn)
+        seed_achievements(conn)
+        conn.commit()
+    finally:
+        db.close()
+
+    return db_path
+
+
 def main():
-    if os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
-
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA foreign_keys = ON")
-
-    create_tables(conn)
-    seed_sessions(conn)
-    seed_user_stats(conn)
-    seed_events(conn)
-    seed_achievements(conn)
-
-    conn.commit()
-    conn.close()
-    print(f"Mock database created at: {DB_PATH}")
+    db_path = create_mock_database()
+    print(f"Mock database created at: {db_path}")
 
 
 if __name__ == "__main__":

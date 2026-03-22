@@ -12,20 +12,22 @@ Or directly:
     python src/vision/tests/test_camera_distractions.py
 """
 
+import importlib
 import time
 import pytest
-try:
-    from camera import Camera
-except ModuleNotFoundError:
-    import os
-    import sys
 
-    # Allow direct execution (python src/vision/tests/test_camera_distractions.py)
-    # by resolving src/vision at runtime.
-    _VISION_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-    if _VISION_DIR not in sys.path:
-        sys.path.insert(0, _VISION_DIR)
-    from camera import Camera
+
+def _import(primary: str, fallback: str, symbol: str):
+    """Try project-root import first, then pytest-pythonpath / direct-run fallback."""
+    for mod in (primary, fallback):
+        try:
+            return getattr(importlib.import_module(mod), symbol)
+        except (ModuleNotFoundError, AttributeError):
+            continue
+    raise ImportError(f"Cannot resolve {symbol} from {primary} or {fallback}")
+
+
+Camera = _import("src.vision.camera", "camera", "Camera")
 
 
 def tick(

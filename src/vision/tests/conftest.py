@@ -1,10 +1,23 @@
 """
 Pytest configuration and fixtures for vision tests.
 """
+import importlib
 import os
 import pytest
-from camera import Camera
-from session_manager import SessionManager
+
+
+def _import(primary: str, fallback: str, symbol: str):
+    """Try project-root import first, then pytest-pythonpath fallback."""
+    for mod in (primary, fallback):
+        try:
+            return getattr(importlib.import_module(mod), symbol)
+        except (ModuleNotFoundError, AttributeError):
+            continue
+    raise ImportError(f"Cannot resolve {symbol} from {primary} or {fallback}")
+
+
+Camera = _import("src.vision.camera", "camera", "Camera")
+SessionManager = _import("src.intelligence.session_manager", "session_manager", "SessionManager")
 
 
 class _FakeEyeTracker:
@@ -58,8 +71,8 @@ def vision_session_manager():
     Yields:
         SessionManager: A session manager for use in vision tests.
     """
-    from database import Database
-    
+    Database = _import("src.intelligence.database", "database", "Database")
+
     # Use a temporary test DB so vision tests don't pollute data.db
     test_db_path = os.path.join(os.path.dirname(__file__), "vision_test_data.db")
     
