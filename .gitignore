@@ -222,3 +222,6 @@ uv.lock
 #claude settings
 .claude
 CLAUDE.md
+
+#pdf file
+*.pdf
