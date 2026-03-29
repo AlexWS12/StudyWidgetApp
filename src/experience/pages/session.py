@@ -1,9 +1,16 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QApplication as QtApplication
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
+    QApplication as QtApplication,
+)
 
 from src.experience.widgets.centered_label import CenteredLabel
 from src.experience.widgets.vision_stream import VisionStream
 from src.experience.widgets.distraction_list import DistractionList
+from src.experience.widgets.session_report import SessionReport
 from src.experience.button import Button
+
+_LIVE_VIEW = 0
+_REPORT_VIEW = 1
 
 
 class Session(QWidget):
@@ -14,10 +21,17 @@ class Session(QWidget):
         root_layout = QVBoxLayout()
         self.setLayout(root_layout)
 
-        root_layout.addWidget(CenteredLabel("Session"))
+        self._stack = QStackedWidget()
+        root_layout.addWidget(self._stack)
+
+        # --- Live session view (index 0) ---
+        live_page = QWidget()
+        live_layout = QVBoxLayout(live_page)
+
+        live_layout.addWidget(CenteredLabel("Session"))
 
         content_layout = QHBoxLayout()
-        root_layout.addLayout(content_layout)
+        live_layout.addLayout(content_layout)
 
         self.vision_stream = VisionStream()
         content_layout.addWidget(self.vision_stream, stretch=3)
@@ -29,15 +43,43 @@ class Session(QWidget):
         self.stop_btn.setObjectName("stopSessionButton")
         self.stop_btn.clicked.connect(self._stop_session)
         self.stop_btn.hide()
-        root_layout.addWidget(self.stop_btn)
+        live_layout.addWidget(self.stop_btn)
+
+        self._stack.addWidget(live_page)
+
+        # --- Report view (index 1) ---
+        report_page = QWidget()
+        report_layout = QVBoxLayout(report_page)
+
+        self.session_report = SessionReport()
+        report_layout.addWidget(self.session_report)
+
+        self.back_btn = Button("Back to Dashboard")
+        self.back_btn.setObjectName("startSessionButton")
+        self.back_btn.clicked.connect(self._back_to_dashboard)
+        report_layout.addWidget(self.back_btn)
+
+        self._stack.addWidget(report_page)
 
     def _stop_session(self):
         app = QtApplication.instance()
         app.vision_manager.stop_session()
         app.session_manager.end_session()
-        app.session_manager.reset()
         app.pet_window.hide()
         self.stop_btn.hide()
+        self.distraction_list.stop_polling()
+
+        report_data = app.session_manager.session_report()
+        app.session_manager.reset()
+
+        self.session_report.load(report_data)
+        self._stack.setCurrentIndex(_REPORT_VIEW)
+        app.main_window.show()
+        app.main_window.raise_()
+
+    def _back_to_dashboard(self):
+        app = QtApplication.instance()
+        self._stack.setCurrentIndex(_LIVE_VIEW)
         app.main_window.pages_stack.setCurrentIndex(0)
 
     def showEvent(self, event):
@@ -46,8 +88,7 @@ class Session(QWidget):
         from src.intelligence.session_manager import SessionState
         if app.session_manager.session_state == SessionState.IN_PROGRESS:
             self.stop_btn.show()
-        else:
-            self.stop_btn.hide()
+            self._stack.setCurrentIndex(_LIVE_VIEW)
         self.distraction_list.start_polling()
 
     def hideEvent(self, event):
