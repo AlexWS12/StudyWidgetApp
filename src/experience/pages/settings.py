@@ -1,7 +1,20 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QApplication
-from src.experience.widgets.centered_label import CenteredLabel
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QFrame, QGridLayout, QVBoxLayout, QWidget
 
 from src.experience.button import Button
+from src.experience.widgets.centered_label import CenteredLabel
+from src.experience.widgets.distraction_toggles import DistractionToggles
+
+
+def _placeholder_card(parent: QWidget, title: str) -> QFrame:
+    card = QFrame(parent)
+    card.setObjectName("statCard")
+    card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    layout = QVBoxLayout(card)
+    layout.setContentsMargins(10, 10, 10, 10)
+    layout.addWidget(CenteredLabel(title))
+    return card
+
 
 class Settings(QWidget):
     def __init__(self, parent: None):
@@ -10,6 +23,23 @@ class Settings(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
         self.layout.addWidget(CenteredLabel("Settings"))
+
+        self.grid_layout = QGridLayout()
+        self.layout.addLayout(self.grid_layout)
+
+        self.distraction_toggles = DistractionToggles(self)
+        self.grid_layout.addWidget(self.distraction_toggles, 0, 0)
+
+        self.placeholder_section_2 = _placeholder_card(self, "Section 2")
+        self.grid_layout.addWidget(self.placeholder_section_2, 0, 1)
+
+        self.placeholder_section_3 = _placeholder_card(self, "Section 3")
+        self.grid_layout.addWidget(self.placeholder_section_3, 1, 0)
+
+        self.placeholder_section_4 = _placeholder_card(self, "Section 4")
+        self.grid_layout.addWidget(self.placeholder_section_4, 1, 1)
+
+        self.layout.addStretch(1)
 
         self.dark_mode = Button("Change Theme")
         self.app = QApplication.instance()
