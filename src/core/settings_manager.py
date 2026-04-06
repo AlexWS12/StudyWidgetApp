@@ -16,9 +16,22 @@ _DEFAULT_WEIGHTS: dict[str, float] = {
     DistractionType.IDLE_DISTRACTION.value:      0.15,
 }
 
+# Detection thresholds used by the vision layer.
+# Phone detection values start as None (must be set by calibration).
+# Gaze angle defaults match attention_tracker.py hardcoded values.
+_DEFAULT_DETECTION_THRESHOLDS = {
+    "yolo_conf": None,
+    "few_shot_similarity": None,
+    "fallback_conf": None,
+    "yaw_threshold_deg": 18.0,
+    "pitch_threshold_deg": 15.0,
+    "roll_threshold_deg": 22.0,
+}
+
 _DEFAULTS = {
     "enabled_distractions": [dt.value for dt in DistractionType],
     "distraction_weights": dict(_DEFAULT_WEIGHTS),
+    "detection_thresholds": dict(_DEFAULT_DETECTION_THRESHOLDS),
 }
 
 
@@ -64,6 +77,26 @@ def enabled_distractions() -> set[DistractionType]:
             result.add(DistractionType(value))
         except ValueError:
             continue
+    return result
+
+
+def detection_thresholds() -> dict[str, float | None]:
+    """Load settings and return detection thresholds.
+
+    Returns a dict with keys matching _DEFAULT_DETECTION_THRESHOLDS.
+    Phone detection values may be None if calibration hasn't run yet.
+    """
+    raw = load().get("detection_thresholds", {})
+    result: dict[str, float | None] = {}
+    for key, default in _DEFAULT_DETECTION_THRESHOLDS.items():
+        val = raw.get(key)
+        if val is None:
+            result[key] = default
+        else:
+            try:
+                result[key] = float(val)
+            except (ValueError, TypeError):
+                result[key] = default
     return result
 
 

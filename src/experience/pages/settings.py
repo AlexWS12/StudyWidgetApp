@@ -4,9 +4,9 @@ from src.core import settings_manager
 from src.experience.button import Button
 from src.experience.widgets.centered_label import CenteredLabel
 from src.experience.widgets.distraction_per_type_fields_panel import (
+    DetectionThresholdsPanel,
     DistractionCountSecondsPanel,
     DistractionImportancePanel,
-    DistractionThresholdPanel,
 )
 from src.experience.widgets.distraction_toggles import DistractionToggles
 
@@ -28,8 +28,8 @@ class Settings(QWidget):
         self.distraction_importance_panel = DistractionImportancePanel(self)
         self.grid_layout.addWidget(self.distraction_importance_panel, 0, 1)
 
-        self.distraction_threshold_panel = DistractionThresholdPanel(self)
-        self.grid_layout.addWidget(self.distraction_threshold_panel, 1, 0)
+        self.detection_thresholds_panel = DetectionThresholdsPanel(self)
+        self.grid_layout.addWidget(self.detection_thresholds_panel, 1, 0)
 
         self.distraction_count_seconds_panel = DistractionCountSecondsPanel(self)
         self.grid_layout.addWidget(self.distraction_count_seconds_panel, 1, 1)
@@ -55,6 +55,7 @@ class Settings(QWidget):
         settings["enabled_distractions"] = [dt.value for dt in enabled]
         weights = self.distraction_importance_panel.get_weights()
         settings["distraction_weights"] = {dt.value: w for dt, w in weights.items()}
+        settings["detection_thresholds"] = self.detection_thresholds_panel.get_thresholds()
         settings_manager.save(settings)
 
     def darkmode(self):
