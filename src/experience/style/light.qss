@@ -82,6 +82,17 @@ QFrame#statCard {
     border-radius: 10px;
 }
 
+QPushButton {
+    background-color: #e8ecf4;
+    border: 1px solid #dde3f0;
+    border-radius: 8px;
+    padding: 8px 14px;
+}
+
+QPushButton:hover {
+    background-color: #dce1ed;
+}
+
 QPushButton#startSessionButton {
     background-color: #3b7deb;
     color: #ffffff;
