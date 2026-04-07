@@ -12,8 +12,9 @@ class SessionState(Enum):
 
 class DistractionType(Enum):
     # Canonical list of all distraction types tracked by the app.
-    # Used as keys in SEVERITY and distraction_data so there are no raw strings
+    # Used as keys in distraction_data so there are no raw strings
     # floating around — adding a new type here forces you to handle it everywhere.
+    # Default severity weights live in settings_manager._DEFAULT_WEIGHTS.
     PHONE_DISTRACTION = "phone_distraction"
     LOOK_AWAY_DISTRACTION = "look_away_distraction"
     LEFT_DESK_DISTRACTION = "left_desk_distraction"
@@ -165,6 +166,13 @@ class SessionManager:
         # Loaded from settings.json at session start so mid-session setting changes
         # don't alter a running session's tracking.
         self.enabled_distractions: set[DistractionType] = set(DistractionType)
+        # Per-session severity weights used by calculate_score().
+        # Loaded from settings.json via settings_manager; defaults are defined
+        # in settings_manager._DEFAULT_WEIGHTS.
+        self.severity_weights: dict[DistractionType, float] = (
+            settings_manager.distraction_weights() if settings_manager is not None
+            else {dt: 0 for dt in DistractionType}
+        )
 
     def reset(self):
         # Resets all session state back to defaults, allowing the instance to be reused.
@@ -184,6 +192,10 @@ class SessionManager:
         # A fresh snapshot is taken in the next start_session() call.
         self._enabled_types = None
         self.enabled_distractions = set(DistractionType)
+        self.severity_weights = (
+            settings_manager.distraction_weights() if settings_manager is not None
+            else {dt: 0 for dt in DistractionType}
+        )
 
     def start_session(self):
         if self.session_state != SessionState.READY:
@@ -195,6 +207,7 @@ class SessionManager:
         self._enabled_types = self.user_config.get_enabled_types()
         if settings_manager is not None:
             self.enabled_distractions = settings_manager.enabled_distractions()
+            self.severity_weights = settings_manager.distraction_weights()
 
         self.session_start_time = time.time()
         cursor = self.db.cursor()
@@ -434,14 +447,15 @@ class SessionManager:
         # Formula: score = clamp(100 - penalty + duration_bonus, 0, 100)
         #
         # penalty:
-        #   Sum of per-type penalties weighted by SEVERITY.
+        #   Sum of per-type penalties weighted by self.severity_weights
+        #   (loaded from settings.json at session start).
         #   Each type contributes two components:
         #     - time_ratio * 50: proportional penalty based on what fraction of the
         #       session was spent distracted. The same 30s distraction hurts more in a
         #       10-min session than a 90-min session.
         #     - count * 2: flat penalty per event occurrence, so frequent brief
         #       distractions are still penalized even if total time is low.
-        #   Both are multiplied by the type's SEVERITY weight.
+        #   Both are multiplied by the type's severity weight.
         #
         # duration_bonus:
         #   Fixed flat bonus by session length tier. Rewards sustained effort and
@@ -467,7 +481,8 @@ class SessionManager:
                 if count == 0 and time_spent == 0:
                     continue
                 time_ratio = time_spent / duration
-                penalty += SEVERITY[dtype] * (time_ratio * 50 + count * 2)
+                weight = self.severity_weights.get(dtype, 0)
+                penalty += weight * (time_ratio * 50 + count * 2)
 
         duration_minutes = duration / 60
         if duration_minutes >= 90:
