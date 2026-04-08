@@ -360,7 +360,7 @@ class SessionManager:
 
         analyzer = PatternAnalyzer()
         analyzer.generate_session_report(self.current_session_id)
-        analyzer.generate_markdown_report(last_analyzed_count=last_analyzed_count)
+        analyzer.generate_insights_report(last_analyzed_count=last_analyzed_count)
         # Session data is intentionally kept in memory (current_session_id, distraction_events)
         # until reset() is explicitly called, so session_report() can still be accessed after end.
 
