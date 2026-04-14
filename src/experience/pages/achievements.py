@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QGridLayout
+from PySide6.QtCore import Qt
 from src.experience.widgets.centered_label import CenteredLabel
 from src.experience.widgets.achievement_catalog import ACHIEVMENT_CATALOG
 from src.experience.widgets.achievement_card import Achievement_Card
@@ -18,13 +19,16 @@ class Achievements(QWidget):
         # Scroll function setup
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
         container = QWidget()
-        container.setStyleSheet("background-color: #f4f6fb;")
-        self.container_layout = QVBoxLayout()
-        self.container_layout.setSpacing(12)
+        container.setObjectName("achievementsContainer")
+        self.container_layout = QGridLayout()
+        self.container_layout.setSpacing(16)
         self.container_layout.setContentsMargins(24, 16, 24, 16)
+        for column in range(3):
+            self.container_layout.setColumnStretch(column, 1)
         container.setLayout(self.container_layout)
         scroll.setWidget(container)
 
@@ -37,7 +41,8 @@ class Achievements(QWidget):
         self._refresh_state()
 
     def create_card(self):
-        for achievement, info in ACHIEVMENT_CATALOG.items():
+        columns = 3
+        for index, (achievement, info) in enumerate(ACHIEVMENT_CATALOG.items()):
             description = info["description"]
             goal = info["goal"]
             icon = info["icon"]
@@ -47,7 +52,13 @@ class Achievements(QWidget):
             else:
                 completed = False
 
-            self.container_layout.addWidget(Achievement_Card(achievement, description, self.progress[achievement], goal, completed, icon))
+            row = index // columns
+            column = index % columns
+            self.container_layout.addWidget(
+                Achievement_Card(achievement, description, self.progress[achievement], goal, completed, icon),
+                row,
+                column,
+            )
 
     def _clear_layout(self, layout):
         while layout.count():

@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QHBoxLayout
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QSizePolicy
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 
@@ -7,27 +7,34 @@ class Achievement_Card(QFrame):
         super().__init__()
         self.setObjectName("achievementCard")
 
-        # Set up layout
-        card_layout = QHBoxLayout()
+        # Vertical tile layout
+        card_layout = QVBoxLayout()
         self.setLayout(card_layout)
-        card_layout.setContentsMargins(12, 8, 12, 8)
-        card_layout.setSpacing(4)
-        self.setMinimumHeight(50)
-
-        left = QVBoxLayout()
-        left.addWidget(QLabel(name))
-        left.addWidget(QLabel(description))
+        card_layout.setContentsMargins(12, 12, 12, 12)
+        card_layout.setSpacing(8)
+        self.setMinimumHeight(260)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.icon = QLabel()
-        pixmap = QPixmap(icon_path)
-        pixmap = QPixmap(icon_path).scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        pixmap = QPixmap(icon_path).scaled(140, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.icon.setPixmap(pixmap)
+        self.icon.setAlignment(Qt.AlignCenter)
+
+        progress = min(progress, goal)
+        title = QLabel(name)
+        title.setAlignment(Qt.AlignCenter)
+        title.setWordWrap(True)
+        description_label = QLabel(description)
+        description_label.setAlignment(Qt.AlignCenter)
+        description_label.setWordWrap(True)
+        progress_label = QLabel(f"{progress} / {goal}")
+        progress_label.setAlignment(Qt.AlignCenter)
 
         card_layout.addWidget(self.icon)
-        card_layout.addLayout(left)
+        card_layout.addWidget(title)
+        card_layout.addWidget(description_label)
         card_layout.addStretch()
-        progress = min(progress, goal)
-        card_layout.addWidget(QLabel(f"{progress} / {goal}"))
+        card_layout.addWidget(progress_label)
 
         # Turns background green if goal is meet
         if unlocked:
