@@ -8,8 +8,9 @@ from ultralytics import YOLO
 class PhoneCalibration:
     """Interactive helper that tunes phone-detection settings for the current user/environment."""
 
-    def __init__(self, model_path: str = "yolo26n.pt"):
+    def __init__(self, model_path: str = "yolo26n.pt", camera_index: int = 0):
         self.model = YOLO(model_path)  # Load the base detector once and reuse it for all calibration steps.
+        self.camera_index = camera_index
         # __file__ is now detectors/phone_calibration.py; go up one level to reach the vision root
         self.animations_dir = os.path.join(os.path.dirname(__file__), "..", "assets", "animations")
         self.few_shot_bundle_path = os.path.join(os.path.dirname(__file__), "..", "phone_few_shot_bundle.npz")
@@ -588,7 +589,7 @@ class PhoneCalibration:
         """
         Interactive multi-phase calibration with auto-start and clear rotation prompts.
         """
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(self.camera_index)
         if not cap.isOpened():
             return {"error": "Cannot open camera"}
 
@@ -948,7 +949,7 @@ class PhoneCalibration:
         # [INTELLIGENCE TEAM] Detection here runs with the newly computed conf_threshold
         # so users see exactly the sensitivity the runtime pipeline will use.
         if not cap.isOpened():
-            cap = cv2.VideoCapture(0)
+            cap = cv2.VideoCapture(self.camera_index)
         
         conf_threshold = self.calibration_data["optimal_conf_threshold"]  # Threshold chosen by _analyze_calibration().
         validation_duration = 10  # seconds the user gets to verify the result before auto-accept.
