@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QApplication, QComboBox, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QComboBox, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QMessageBox, QVBoxLayout, QWidget
 
 from src.core import settings_manager
 from src.experience.button import Button
@@ -213,6 +213,19 @@ class Settings(QWidget):
         if not ok or not name.strip():
             return
         name = name.strip()
+
+        # Confirm before overwriting an existing profile
+        if name in settings_manager.list_profiles():
+            reply = QMessageBox.question(
+                self,
+                "Overwrite Profile",
+                f'A profile named "{name}" already exists.\nOverwrite it?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
         profile = {
             "detection_thresholds": self.detection_thresholds_panel.get_thresholds(),
             "enabled_distractions": [dt.value for dt in self.distraction_toggles.get_enabled_types()],
@@ -225,6 +238,15 @@ class Settings(QWidget):
         """Delete the currently selected profile."""
         name = self.profile_combo.currentText()
         if not name:
+            return
+        reply = QMessageBox.question(
+            self,
+            "Delete Profile",
+            f'Delete profile "{name}"? This cannot be undone.',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
             return
         settings_manager.delete_profile(name)
         self._refresh_profile_combo()
