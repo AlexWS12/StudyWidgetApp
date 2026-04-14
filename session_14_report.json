@@ -1,0 +1,38 @@
+{
+  "generated_at": "2026-04-14T16:32:20.736803",
+  "session_id": 14,
+  "overview": {
+    "start_time": "2026-04-14T16:31:53",
+    "end_time": "2026-04-14T16:32:20",
+    "duration_seconds": 27,
+    "duration_minutes": 0.5,
+    "focused_time_seconds": 0,
+    "focused_time_minutes": 0.0,
+    "distraction_time_seconds": 27,
+    "distraction_time_minutes": 0.5
+  },
+  "distractions": {
+    "phone_distraction": {
+      "count": 0,
+      "event_durations_seconds": []
+    },
+    "look_away_distraction": {
+      "count": 0,
+      "event_durations_seconds": []
+    },
+    "left_desk_distraction": {
+      "count": 1,
+      "event_durations_seconds": [
+        27
+      ]
+    },
+    "app_distraction": {
+      "count": 0,
+      "event_durations_seconds": []
+    },
+    "idle_distraction": {
+      "count": 0,
+      "event_durations_seconds": []
+    }
+  }
+}
