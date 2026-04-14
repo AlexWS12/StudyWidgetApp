@@ -1,8 +1,9 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLabel
 from src.experience.widgets.centered_label import CenteredLabel
 from src.experience.button import Button
 from src.core.qApplication import QApplication
 from src.experience.widgets.vision_stream import VisionStream
+from src.vision.camera_devices import list_cameras
 
 class Setup(QWidget):
     def __init__(self, parent: None):
@@ -14,6 +15,17 @@ class Setup(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
+        # Camera selector
+        camera_row = QHBoxLayout()
+        camera_label = QLabel("Camera:")
+        camera_label.setObjectName("secondaryLabel")
+        self.camera_combo = QComboBox()
+        self.camera_combo.setObjectName("cameraCombo")
+        self._populate_cameras()
+        self.camera_combo.currentIndexChanged.connect(self._on_camera_changed)
+        camera_row.addWidget(camera_label)
+        camera_row.addWidget(self.camera_combo, 1)
+        self.layout.addLayout(camera_row)
 
         self.vision_stream = VisionStream()
         self.layout.addWidget(self.vision_stream)
@@ -34,8 +46,31 @@ class Setup(QWidget):
         start_btn.clicked.connect(self.start_session)
         self.layout.addWidget(start_btn)
 
+    def _populate_cameras(self) -> None:
+        """Discover available cameras and fill the combo box."""
+        self.camera_combo.blockSignals(True)
+        self.camera_combo.clear()
+        cameras = list_cameras()
+        for cam in cameras:
+            self.camera_combo.addItem(cam["name"], cam["index"])
+        # Pre-select the currently active camera index
+        current = self.app.vision_manager.camera_index
+        for i in range(self.camera_combo.count()):
+            if self.camera_combo.itemData(i) == current:
+                self.camera_combo.setCurrentIndex(i)
+                break
+        self.camera_combo.blockSignals(False)
+
+    def _on_camera_changed(self, combo_index: int) -> None:
+        """Switch the vision pipeline to the newly selected camera."""
+        if combo_index < 0:
+            return
+        device_index = self.camera_combo.itemData(combo_index)
+        self.app.vision_manager.set_camera_index(device_index)
+
     def showEvent(self, event):
         super().showEvent(event)
+        self._populate_cameras()
         self.vision_stream.start_stream()
 
     def hideEvent(self, event):

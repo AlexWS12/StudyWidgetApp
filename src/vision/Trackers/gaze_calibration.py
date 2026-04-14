@@ -9,8 +9,9 @@ from .attention_tracker import gazeTracker  # relative import: both files are in
 class GazeCalibrator:
     """Calibrates neutral center and screen-corner gaze envelope."""
 
-    def __init__(self, samples_per_target: int = 20):
+    def __init__(self, samples_per_target: int = 20, camera_index: int = 0):
         self.samples_per_target = samples_per_target
+        self.camera_index = camera_index
         self.tracker = gazeTracker()
 
     def _target_position(self, target_name: str, w: int, h: int) -> tuple[int, int]:
@@ -40,7 +41,7 @@ class GazeCalibrator:
 
     def run(self) -> dict:
         """Guide the user through center + corner targets and persist a calibration profile."""
-        cap = cv.VideoCapture(0)
+        cap = cv.VideoCapture(self.camera_index)
         if not cap.isOpened():
             return {"success": False, "message": "Cannot open camera"}
 

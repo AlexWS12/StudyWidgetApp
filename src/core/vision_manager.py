@@ -25,10 +25,29 @@ class VisionManager(QObject):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._session_active = False
+        self._camera_index: int = 0
+
+    @property
+    def camera_index(self) -> int:
+        return self._camera_index
 
     @property
     def is_running(self) -> bool:
         return self._camera is not None and self._timer.isActive()
+
+    def set_camera_index(self, index: int) -> None:
+        """Change the active camera device.
+
+        If the camera is currently running in preview mode, it is restarted
+        with the new device automatically.  During an active session the
+        index is stored and will take effect on the next start.
+        """
+        if index == self._camera_index:
+            return
+        self._camera_index = index
+        if self.is_running and not self._session_active:
+            self._force_stop()
+            self.start()
 
     # ------------------------------------------------------------------
     # Preview (Setup page camera feed, no distraction logging)
@@ -39,7 +58,7 @@ class VisionManager(QObject):
         if self._session_active:
             return
         if self._camera is None:
-            self._camera = Camera()
+            self._camera = Camera(camera_index=self._camera_index)
         if not self._timer.isActive():
             self._timer.start(30)
             self.stream_state_changed.emit(True)
@@ -58,7 +77,7 @@ class VisionManager(QObject):
         """Start the camera with distraction logging for an active study session."""
         self._force_stop()
         self._session_active = True
-        self._camera = Camera(session_manager=session_manager)
+        self._camera = Camera(session_manager=session_manager, camera_index=self._camera_index)
         self._camera._on_distraction_started = self._on_camera_distraction
         self._timer.start(30)
         self.stream_state_changed.emit(True)
@@ -102,7 +121,7 @@ class VisionManager(QObject):
         if was_running:
             self._force_stop()
         try:
-            return PhoneCalibration().run_calibration(target_detections=target_detections)
+            return PhoneCalibration(camera_index=self._camera_index).run_calibration(target_detections=target_detections)
         finally:
             if was_running:
                 self.start()
@@ -112,7 +131,7 @@ class VisionManager(QObject):
         if was_running:
             self._force_stop()
         try:
-            return GazeCalibrator().run()
+            return GazeCalibrator(camera_index=self._camera_index).run()
         finally:
             if was_running:
                 self.start()
