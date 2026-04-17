@@ -95,7 +95,7 @@ class petWindow(QMainWindow):
         self.layout.addWidget(self.session_btn)
         self.setCentralWidget(self.container)
 
-        self.setFixedSize(100, 130)
+        self.setFixedSize(140, 170)
 
         self.drag_position = None
         self.label.installEventFilter(self)
@@ -123,7 +123,7 @@ class petWindow(QMainWindow):
             pet_info = PET_CATALOG.get(pet_id, PET_CATALOG[DEFAULT_PET])
             pixmap = QPixmap(pet_info["sprite"])
 
-        scaled = pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        scaled = pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.label.setPixmap(scaled)
 
     def eventFilter(self, obj, event):

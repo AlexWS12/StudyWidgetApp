@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from src.experience.widgets.centered_label import CenteredLabel
-from src.experience.widgets.pet_view import PetView
+from src.experience.widgets.pet_view import CompactPetView
 from src.experience.widgets.pet_card import PetCard
 from src.experience.widgets.accessory_card import AccessoryCard
 from src.experience.pet_catalog import PET_CATALOG
@@ -78,7 +78,7 @@ class VirtualPet(QWidget):
         root.addWidget(title)
 
         # ── Live preview ─────────────────────────────────────
-        self.pet_view = PetView(self, size=140)
+        self.pet_view = CompactPetView(self)
         root.addWidget(self.pet_view, alignment=Qt.AlignCenter)
 
         self.pet_name_label = CenteredLabel()
