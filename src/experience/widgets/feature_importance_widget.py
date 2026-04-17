@@ -97,5 +97,12 @@ class FeatureImportanceWidget(QFrame):
 
         top_label = fi.get("top_factor", "")
         r2        = fi.get("r2_score")
-        r2_str    = f"  ·  model fit R²={r2:.2f}" if r2 is not None else ""
-        self._label.setText(f"Top factor: {top_label}{r2_str}")
+        if r2 is None:
+            confidence = ""
+        elif r2 >= 0.6:
+            confidence = " (clear pattern)"
+        elif r2 >= 0.3:
+            confidence = " (some pattern)"
+        else:
+            confidence = " (pattern still noisy)"
+        self._label.setText(f"Top factor right now: {top_label}{confidence}")

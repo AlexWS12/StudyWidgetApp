@@ -19,7 +19,7 @@ class MainWindow(QMainWindow):
         self.data = app.database_reader.get_topbar_data()
 
         # set up the main window
-        self.setWindowTitle("Study Tracker Partner")
+        self.setWindowTitle("ReFocus")
         self.setMinimumWidth(860)
         self.setMinimumHeight(900)
 
@@ -54,8 +54,6 @@ class MainWindow(QMainWindow):
         # intialize stacked pages
         self.pages_stack = QStackedWidget()
         self.pages_stack.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.pages_stack.setMaximumWidth(860)
-        self.pages_stack.setMaximumHeight(900)
 
         # add pages to stack
         self.pages_stack.addWidget(Dashboard(self))
@@ -67,19 +65,7 @@ class MainWindow(QMainWindow):
         self.pages_stack.addWidget(Setup(self))
         self.pages_stack.setCurrentIndex(0)
 
-        # center pages both horizontally and vertically
-        pages_row = QHBoxLayout()
-        pages_row.setContentsMargins(0, 0, 0, 0)
-        pages_row.addStretch(1)
-        pages_row.addWidget(self.pages_stack)
-        pages_row.addStretch(1)
-
-        pages_wrapper = QVBoxLayout()
-        pages_wrapper.setContentsMargins(0, 0, 0, 0)
-        pages_wrapper.addStretch(1)
-        pages_wrapper.addLayout(pages_row)
-        pages_wrapper.addStretch(1)
-        self.topbar_pages_layout.addLayout(pages_wrapper)
+        self.topbar_pages_layout.addWidget(self.pages_stack, stretch=1)
 
         self.show()
 

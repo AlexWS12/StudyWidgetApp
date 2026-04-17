@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QGridLayout, QScrollArea,
+    QWidget, QVBoxLayout, QGridLayout, QScrollArea, QLabel,
 )
 from PySide6.QtCore import Qt
 from src.core.qApplication import QApplication
@@ -30,19 +30,26 @@ class Report(QWidget):
         self.data['total_exp'] = parent.data['exp']
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setContentsMargins(10, 8, 10, 8)
 
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         outer.addWidget(scroll)
 
         container = QWidget()
         container.setObjectName("reportContainer")
         self._layout = QVBoxLayout(container)
+        self._layout.setContentsMargins(12, 8, 12, 12)
+        self._layout.setSpacing(10)
         scroll.setWidget(container)
 
         stats_grid = QGridLayout()
+        stats_grid.setHorizontalSpacing(12)
+        stats_grid.setVerticalSpacing(12)
+        stats_grid.setColumnStretch(0, 1)
+        stats_grid.setColumnStretch(1, 1)
         self.lifetime_focus = LifetimeFocus(self)
         self.total_sessions = TotalSessions(self)
         self.longest_focus = LongestFocus(self)
@@ -55,10 +62,21 @@ class Report(QWidget):
 
         self.focus_trend = FocusTrendChart(self)
         self._layout.addWidget(self.focus_trend)
+        self.focus_trend_note = QLabel(
+            "How to read: each point is one session score. The smoothed line helps you see your overall direction, not one-off bad days."
+        )
+        self.focus_trend_note.setObjectName("secondaryLabel")
+        self.focus_trend_note.setWordWrap(True)
+        self.focus_trend_note.setStyleSheet("font-size: 12px; padding: 2px 4px 8px 4px;")
+        self._layout.addWidget(self.focus_trend_note)
 
         charts_section = QWidget()
         charts_section.setObjectName("reportChartsContainer")
         charts_grid = QGridLayout(charts_section)
+        charts_grid.setHorizontalSpacing(12)
+        charts_grid.setVerticalSpacing(12)
+        charts_grid.setColumnStretch(0, 1)
+        charts_grid.setColumnStretch(1, 1)
         self.distraction_chart = DistractionChart(self)
         self.time_of_day_chart = TimeOfDayChart(self)
         self.session_length_chart = SessionLengthChart(self)
@@ -68,10 +86,21 @@ class Report(QWidget):
         charts_grid.addWidget(self.session_length_chart, 1, 0)
         charts_grid.addWidget(self.peak_hours_chart, 1, 1)
         self._layout.addWidget(charts_section)
+        self.behavior_note = QLabel(
+            "How to read: taller bars mean better average focus. Use these charts to choose your best study time and session length."
+        )
+        self.behavior_note.setObjectName("secondaryLabel")
+        self.behavior_note.setWordWrap(True)
+        self.behavior_note.setStyleSheet("font-size: 12px; padding: 2px 4px 8px 4px;")
+        self._layout.addWidget(self.behavior_note)
 
         ml_section = QWidget()
         ml_section.setObjectName("reportChartsContainer")
         ml_grid = QGridLayout(ml_section)
+        ml_grid.setHorizontalSpacing(12)
+        ml_grid.setVerticalSpacing(12)
+        ml_grid.setColumnStretch(0, 1)
+        ml_grid.setColumnStretch(1, 1)
         self.forecast_chart = ForecastChart(self)
         self.feature_importance = FeatureImportanceWidget(self)
         ml_grid.addWidget(self.forecast_chart, 0, 0)
