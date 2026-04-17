@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer, Signal, QObject
+from PySide6.QtGui import QIcon
 
 from src.experience.main_window import MainWindow
 from src.experience.pet_window import petWindow
@@ -19,6 +20,17 @@ class QApplication(QApplication):
     def __init__(self):
         super().__init__()
         self.signals = AppSignals()
+
+        icon_path = (
+            Path(__file__).resolve().parent.parent
+            / "experience"
+            / "static"
+            / "pets"
+            / "cat"
+            / "Cat.png"
+        )
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
 
         settings_manager.ensure_defaults()
 
