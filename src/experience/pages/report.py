@@ -24,7 +24,7 @@ class Report(QWidget):
         self.app = QApplication.instance()
 
         self.data = self.app.database_reader.load_report_data()
-        self.data['total_exp'] = parent.data['exp']
+        self.data['total_exp'] = (parent.data or {}).get('exp', 0)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)

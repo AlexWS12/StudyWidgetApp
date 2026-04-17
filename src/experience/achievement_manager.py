@@ -42,6 +42,6 @@ class Achievement_Manager():
             "Scholar": topbar["level"],
             "XP Collector": topbar["exp"],
             "Pet Lover": len(self.pm.get_owned_pets()),
-            "Night Lover": 1 if settings_manager.load().get("used_dark_mode", False) else 0,
+            "Night Lover": 1,  #if settings_manager.load().get("used_dark_mode", False) else 0
         }
 

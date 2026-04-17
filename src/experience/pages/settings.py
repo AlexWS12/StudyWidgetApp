@@ -262,3 +262,5 @@ class Settings(QWidget):
             settings = settings_manager.load()
             settings["used_dark_mode"] = True
             settings_manager.save(settings)
+
+            self.app.check_acheivement()

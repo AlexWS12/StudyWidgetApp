@@ -8,11 +8,16 @@ from src.core.vision_manager import VisionManager
 from src.core import settings_manager
 from src.intelligence.session_manager import SessionManager
 
+from src.experience.achievement_manager import Achievement_Manager
+from src.experience.widgets.achievement_catalog import ACHIEVMENT_CATALOG
+from src.core import settings_manager
+
 from pathlib import Path
 
 
 class AppSignals(QObject):
     pet_appearance_changed = Signal()
+    achievement_unlocked = Signal(str)
 
 
 class QApplication(QApplication):
@@ -66,3 +71,21 @@ class QApplication(QApplication):
         )
         if style_path.exists():
             self.setStyleSheet(style_path.read_text())
+
+    def check_acheivement(self):
+        settings = settings_manager.load()
+        already_unlocked = set(settings.get("unlocked_achievements", []))
+        
+        manager = Achievement_Manager()
+        progress = manager.get_progress()
+        newly_unlocked = []
+        
+        for achievement, info in ACHIEVMENT_CATALOG.items():
+            if progress[achievement] >= info["goal"] and achievement not in already_unlocked:
+                self.signals.achievement_unlocked.emit(achievement)
+                newly_unlocked.append(achievement)
+        
+        if newly_unlocked:
+            settings["unlocked_achievements"] = list(already_unlocked | set(newly_unlocked))
+            settings_manager.save(settings)
+

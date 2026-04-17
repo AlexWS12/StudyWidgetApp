@@ -89,10 +89,9 @@ class ReportPetWidget(QFrame):
         self.title.setText(self._title_text())
 
         insights = (
-            (report_data or {})
-            .get("pattern_analysis", {})
-            .get("insights", [])
-        )
+        ((report_data or {}).get("pattern_analysis") or {})
+        .get("insights", [])
+    )
         self.message.setText(self._pick_message(insights, report_data or {}))
         self._reset_fade_timer()
 
@@ -126,7 +125,7 @@ class ReportPetWidget(QFrame):
             self._insight_index = (self._insight_index + 1) % len(insights)
             return insights[self._insight_index]
 
-        analytics = report_data.get("session_analytics", {})
+        analytics = (report_data or {}).get("session_analytics", {})
         total_sessions = analytics.get("total_sessions", 0) or 0
         total_focus = analytics.get("lifetime_focus_seconds", 0) or 0
 

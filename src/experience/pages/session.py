@@ -96,6 +96,7 @@ class Session(QWidget):
         app = QtApplication.instance()
         app.vision_manager.stop_session()
         app.session_manager.end_session()
+        app.check_acheivement()
         app.pet_window.hide()
         self.distraction_list.stop_polling()
 

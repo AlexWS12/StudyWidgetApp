@@ -176,3 +176,14 @@ QFrame#petCard[cardState="equipped"] {
     border-color: #4f8ef7;
     background-color: #1c3360;
 }
+QWidget#achievementPopup {
+    background-color: #2ecc71;
+    border-radius: 8px;
+}
+
+QLabel#achievementText {
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    background: transparent;
+}
