@@ -10,6 +10,10 @@ from src.experience.pages.achievements import Achievements
 from src.experience.pages.settings import Settings
 from src.experience.pages.setup import Setup
 from src.experience.widgets.top_bar import TopBar
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QLabel
+from src.experience.widgets.achievement_catalog import ACHIEVMENT_CATALOG
+from PySide6.QtGui import QPixmap
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -67,10 +71,39 @@ class MainWindow(QMainWindow):
 
         self.topbar_pages_layout.addWidget(self.pages_stack, stretch=1)
 
-        self.show()
+                # Achievement toast
+        self.achievement_container = QWidget()
+        self.achievement_container.setObjectName("achievementPopup")
+        achievement_layout = QHBoxLayout(self.achievement_container)
+        achievement_layout.setContentsMargins(10, 6, 10, 6)
+        achievement_layout.setSpacing(8)
 
+        self.achievement_icon = QLabel()
+        self.achievement_icon.setFixedSize(50, 50)
+        achievement_layout.addWidget(self.achievement_icon)
+
+        self.achievement_text = QLabel("")
+        self.achievement_text.setObjectName("achievementText")
+        achievement_layout.addWidget(self.achievement_text)
+
+        self.achievement_container.hide()
+        self.topbar_pages_layout.insertWidget(1, self.achievement_container)
+
+        app.signals.achievement_unlocked.connect(self._show_achievement_popup)
+
+        self.show()
+       
     def showEvent(self, event):
         super().showEvent(event)
         app = QApplication.instance()
         self.data = app.database_reader.get_topbar_data()
         self.topbar.refresh(self.data)
+
+    def _show_achievement_popup(self, achievement_name: str):
+        info = ACHIEVMENT_CATALOG.get(achievement_name, {})
+        icon_path = info.get("icon", "")
+        pixmap = QPixmap(icon_path).scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.achievement_icon.setPixmap(pixmap)
+        self.achievement_text.setText(f"Achievement Unlocked: {achievement_name}!")
+        self.achievement_container.show()
+        QTimer.singleShot(4000, self.achievement_container.hide)

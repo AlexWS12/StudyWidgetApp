@@ -176,6 +176,17 @@ QFrame#petCard[cardState="equipped"] {
     border-color: #4f8ef7;
     background-color: #1c3360;
 }
+QWidget#achievementPopup {
+    background-color: #2ecc71;
+    border-radius: 8px;
+}
+
+QLabel#achievementText {
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    background: transparent;
+}
 
 QDialog#confirmDialog {
     background-color: #1a2744;
@@ -237,4 +248,9 @@ QMessageBox QLabel,
 QInputDialog QLabel {
     color: #ffffff;
     background-color: transparent;
+}
+QProgressBar#xpBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #3b7deb, stop:1 #63a4ff);
+    border-radius: 8px;
 }

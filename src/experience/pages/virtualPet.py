@@ -359,6 +359,7 @@ class VirtualPet(QWidget):
         app = QApplication.instance()
         if hasattr(app, "signals"):
             app.signals.pet_appearance_changed.emit()
+        app.check_acheivement()
 
     def _show_toast(self, text: str, color: str):
         self.toast_label.setText(text)

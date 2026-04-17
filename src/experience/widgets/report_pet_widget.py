@@ -91,7 +91,9 @@ class ReportPetWidget(QFrame):
     def _refresh_title(self):
         self.title.setText(self._title_text())
 
+
     def refresh(self, report_data: dict):
+          
         self.pet_view.refresh()
         self.title.setText(self._title_text())
 
@@ -134,7 +136,7 @@ class ReportPetWidget(QFrame):
             self._insight_index = (self._insight_index + 1) % len(insights)
             return insights[self._insight_index]
 
-        analytics = report_data.get("session_analytics", {})
+        analytics = (report_data or {}).get("session_analytics", {})
         total_sessions = analytics.get("total_sessions", 0) or 0
         total_focus = analytics.get("lifetime_focus_seconds", 0) or 0
 

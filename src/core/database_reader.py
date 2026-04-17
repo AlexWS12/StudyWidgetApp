@@ -178,3 +178,16 @@ class DatabaseReader(QObject):
             "session_analytics": session_analytics if session_analytics else {},
             "pattern_analysis": self._analysis_cache,
         }
+
+    def get_xp_progress(self):
+        data = self.get_topbar_data()
+        exp = data["exp"]
+        level = 1
+
+        while exp >= (75 * level ** 1.4):
+            exp -= (75 * level ** 1.4)
+            level += 1
+
+        current_xp = exp
+        xp_needed = (75 * level ** 1.4)
+        return current_xp, xp_needed

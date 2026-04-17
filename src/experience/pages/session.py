@@ -96,6 +96,7 @@ class Session(QWidget):
         app = QtApplication.instance()
         app.vision_manager.stop_session()
         app.session_manager.end_session()
+        app.check_acheivement()
         app.pet_window.hide()
         self.distraction_list.stop_polling()
 
@@ -108,6 +109,8 @@ class Session(QWidget):
         self._stack.setCurrentIndex(_REPORT_VIEW)
         app.main_window.show()
         app.main_window.raise_()
+
+        app.main_window.topbar.refresh(app.database_reader.get_topbar_data())
 
     def _back_to_dashboard(self):
         app = QtApplication.instance()

@@ -35,6 +35,7 @@ _DEFAULTS = {
     "distraction_weights": dict(_DEFAULT_WEIGHTS),
     "detection_thresholds": dict(_DEFAULT_DETECTION_THRESHOLDS),
     "used_dark_mode": False,
+    "unlocked_achievements": [],
 }
 
 
