@@ -18,6 +18,16 @@ _DIRECTION_COLORS = {
 }
 
 
+def _confidence_text(r2_score: float | None) -> str:
+    if r2_score is None:
+        return ""
+    if r2_score >= 0.6:
+        return "Confidence: strong pattern."
+    if r2_score >= 0.3:
+        return "Confidence: moderate pattern."
+    return "Confidence: low pattern (results may vary)."
+
+
 class ForecastChart(QFrame):
 
     def __init__(self, parent):
@@ -131,13 +141,14 @@ class ForecastChart(QFrame):
 
         direction = forecast.get("direction", "stable")
         slope     = forecast.get("slope", 0)
-        sign      = "+" if slope >= 0 else ""
         color     = _DIRECTION_COLORS.get(direction, "#f5a623")
         self._label.setStyleSheet(f"color: {color};")
         if preds:
+            confidence = _confidence_text(forecast.get("r2_score"))
             self._label.setText(
-                f"{direction.capitalize()}  ({sign}{slope:.1f} pts/session)  "
-                f"· projected: {preds[-1]:.0f} in 5 sessions"
+                f"Likely {direction} over the next 5 sessions. "
+                f"Estimated score near {preds[-1]:.0f}. {confidence}".strip()
             )
         else:
-            self._label.setText(f"{direction.capitalize()}  ({sign}{slope:.1f} pts/session)")
+            trend_hint = "up" if slope > 0 else "down" if slope < 0 else "flat"
+            self._label.setText(f"Current direction looks {trend_hint}.")
